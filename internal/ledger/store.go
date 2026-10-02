@@ -34,6 +34,10 @@ func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(dir, "archive"), 0700); err != nil {
 		return nil, err
 	}
+	// Protect SQLite WAL/SHM files as well as the primary database.
+	if err := os.Chmod(dir, 0700); err != nil {
+		return nil, err
+	}
 	db, err := sql.Open("sqlite", filepath.Join(dir, "ledger.db"))
 	if err != nil {
 		return nil, err
