@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -66,7 +67,11 @@ it("opens readable email text before parser settings, including HTML-only mail",
     if (url === "/api/messages/1") return reply(message);
     throw Error("Unexpected URL");
   });
-  render(<App />);
+  // Flush authentication and queue effects before querying the loaded inbox.
+  // A synchronous render leaves nested effects to JSDOM frame scheduling.
+  await act(async () => {
+    render(<App />);
+  });
   fireEvent.click(await screen.findByRole("button", { name: "Review" }));
   const text = await screen.findByLabelText("Email text");
   expect((text as HTMLTextAreaElement).value).toBe(message.body);
