@@ -1,0 +1,130 @@
+package server
+
+import (
+	"database/sql"
+	"errors"
+	"net/http"
+
+	"github.com/audemed44/ledger/internal/statements"
+	"github.com/audemed44/ledger/internal/store"
+)
+
+func (s *Server) statementRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/pdf-config", func(w http.ResponseWriter, r *http.Request) {
+		slots := []int{}
+		for i, p := range s.PDFPasswords {
+			if p != "" {
+				slots = append(slots, i+1)
+			}
+		}
+		jsonResponse(w, map[string]any{"password_slots": slots, "adapters": statements.Adapters})
+	})
+	mux.HandleFunc("GET /api/statement-parsers", func(w http.ResponseWriter, r *http.Request) {
+		p, err := s.Store.StatementParsers()
+		if err != nil {
+			failure(w, 500, "Could not load statement parsers")
+			return
+		}
+		jsonResponse(w, p)
+	})
+	mux.HandleFunc("POST /api/statement-parsers", func(w http.ResponseWriter, r *http.Request) {
+		var p statements.Parser
+		if !decode(w, r, &p) {
+			return
+		}
+		if err := p.Validate(); err != nil {
+			failure(w, 400, err.Error())
+			return
+		}
+		if !s.passwordSlotSet(p.PasswordSlot) {
+			failure(w, 400, "That password slot is not configured on the server")
+			return
+		}
+		saved, err := s.Store.SaveStatementParser(p)
+		if errors.Is(err, store.ErrParserNameTaken) {
+			failure(w, 409, err.Error())
+			return
+		}
+		if err != nil {
+			failure(w, 500, "Could not save statement parser")
+			return
+		}
+		jsonResponse(w, saved)
+	})
+	mux.HandleFunc("DELETE /api/statement-parsers/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := pathID(r)
+		if id == 0 {
+			failure(w, 400, "Invalid parser")
+			return
+		}
+		err := s.Store.DeleteStatementParser(id)
+		if errors.Is(err, sql.ErrNoRows) {
+			failure(w, 404, "Statement parser not found")
+			return
+		}
+		if err != nil {
+			failure(w, 500, "Could not delete statement parser")
+			return
+		}
+		jsonResponse(w, map[string]bool{"ok": true})
+	})
+
+	// PDF work runs one extraction at a time, to bound memory and CPU.
+	busy := make(chan struct{}, 1)
+	mux.HandleFunc("POST /api/messages/{id}/pdf", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Part        int    `json:"part"`
+			ParserID    int64  `json:"parser_id"`
+			Import      bool   `json:"import"`
+			Fingerprint string `json:"fingerprint"`
+		}
+		if !decode(w, r, &body) {
+			return
+		}
+		var parser *statements.Parser
+		if body.ParserID != 0 {
+			parsers, err := s.Store.StatementParsers()
+			if err != nil {
+				failure(w, 500, "Could not load statement parsers")
+				return
+			}
+			for _, p := range parsers {
+				if p.ID == body.ParserID {
+					parser = &p
+					break
+				}
+			}
+			if parser == nil {
+				failure(w, 404, "Statement parser not found")
+				return
+			}
+		}
+		select {
+		case busy <- struct{}{}:
+			defer func() { <-busy }()
+		default:
+			failure(w, 429, "Another PDF is being processed. Try again shortly")
+			return
+		}
+		id := pathID(r)
+		result, err := s.Store.PreviewPDF(r.Context(), id, body.Part, parser, s.PDFPasswords)
+		if err != nil {
+			failure(w, 422, err.Error())
+			return
+		}
+		if body.Import {
+			imported, err := s.Store.ImportStatement(id, body.Part, result, body.Fingerprint)
+			if err != nil {
+				failure(w, 409, err.Error())
+				return
+			}
+			result.Imported = &imported
+		}
+		jsonResponse(w, result)
+	})
+}
+
+// passwordSlotSet reports whether slot is 0 (try all) or a configured password.
+func (s *Server) passwordSlotSet(slot int) bool {
+	return slot == 0 || (slot <= len(s.PDFPasswords) && s.PDFPasswords[slot-1] != "")
+}

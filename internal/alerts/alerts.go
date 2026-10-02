@@ -1,14 +1,19 @@
-package ledger
+// Package alerts turns per-transaction alert emails into transactions. A
+// parser matches one exact sender and a subject regex, then extracts one
+// transaction from the body with a regex of named groups.
+package alerts
 
 import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/audemed44/ledger/internal/ledger"
 )
 
+// Parser is one alert format from one issuer.
 type Parser struct {
 	Issuer      string `json:"issuer"`
 	AccountKind string `json:"account_kind" yaml:"account_kind"`
@@ -20,62 +25,29 @@ type Parser struct {
 	DateLayout  string `json:"date_layout" yaml:"date_layout"`
 	Timezone    string `json:"timezone"`
 	Currency    string `json:"currency"`
-	Direction   string `json:"direction"`
+	Direction   string `json:"direction"` // debit, credit or ignore
 	Enabled     bool   `json:"enabled"`
 }
 
-type Transaction struct {
-	AccountID   string `json:"account_id"`
-	AccountKind string `json:"account_kind"`
-	ID          int64  `json:"id"`
-	MessageID   int64  `json:"message_id"`
-	Merchant    string `json:"merchant"`
-	Account     string `json:"account"`
-	Amount      int64  `json:"amount"`
-	Currency    string `json:"currency"`
-	Direction   string `json:"direction"`
-	Date        string `json:"date"`
-	Reference   string `json:"reference"`
-	Status      string `json:"status"`
-	Issuer      string `json:"issuer"`
-}
-
+// Preview is what a parser makes of one email.
 type Preview struct {
-	Matched     bool         `json:"matched"`
-	Ignored     bool         `json:"ignored"`
-	Transaction *Transaction `json:"transaction,omitempty"`
+	Matched     bool                `json:"matched"`
+	Ignored     bool                `json:"ignored"`
+	Transaction *ledger.Transaction `json:"transaction,omitempty"`
 }
 
-var currencies = map[string]bool{"INR": true, "USD": true, "EUR": true, "GBP": true, "AUD": true, "CAD": true, "SGD": true, "AED": true, "CHF": true, "HKD": true}
-var moneyPattern = regexp.MustCompile(`^(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+|[0-9]{1,2}(?:,[0-9]{2})*,[0-9]{3})(?:\.[0-9]{1,2})?$`)
-var lastFour = regexp.MustCompile(`^[0-9]{4}$`)
+var required = []string{"amount", "merchant", "account", "date"}
 
-// Amounts never pass through floating point. Unsupported precision is rejected.
-func MinorUnits(value string) (int64, error) {
-	value = strings.TrimSpace(value)
-	if !moneyPattern.MatchString(value) {
-		return 0, errors.New("amount must be positive with at most two decimal places")
-	}
-	parts := strings.Split(strings.ReplaceAll(value, ",", ""), ".")
-	fraction := "00"
-	if len(parts) == 2 {
-		fraction = (parts[1] + "0")[:2]
-	}
-	n, err := strconv.ParseInt(parts[0]+fraction, 10, 64)
-	if err != nil || n <= 0 || n > 1_000_000_000_000_00 {
-		return 0, errors.New("amount outside supported range")
-	}
-	return n, nil
-}
-
+// Validate checks the definition before it's saved or run.
 func (p Parser) Validate() error {
 	if len(p.Issuer) > 100 || strings.ContainsRune(p.Issuer, 0) {
 		return errors.New("invalid issuer")
 	}
-	if p.AccountKind != "" && p.AccountKind != "unknown" && p.AccountKind != "card" && p.AccountKind != "bank" {
+	switch p.AccountKind {
+	case "", "unknown", "card", "bank":
+	default:
 		return errors.New("account type must be card or bank")
 	}
-
 	if strings.TrimSpace(p.Name) == "" || len(p.Name) > 100 || !strings.Contains(p.Sender, "@") {
 		return errors.New("issuer name and exact sender email are required")
 	}
@@ -101,34 +73,39 @@ func (p Parser) Validate() error {
 	if p.Direction == "ignore" {
 		return nil
 	}
-	if !currencies[p.Currency] {
+	if !ledger.Currencies[p.Currency] {
 		return errors.New("select a supported two-decimal currency")
 	}
 	if p.DateLayout == "" {
 		return errors.New("date layout is required")
 	}
-	for _, name := range []string{"amount", "merchant", "account", "date"} {
+	for _, name := range required {
 		if re.SubexpIndex(name) < 0 {
 			return fmt.Errorf("missing named group %s", name)
 		}
 	}
 	seen := map[string]bool{}
 	for _, name := range re.SubexpNames() {
-		if name != "" {
-			if seen[name] {
-				return fmt.Errorf("duplicate group %s", name)
-			}
-			seen[name] = true
+		if name == "" {
+			continue
 		}
+		if seen[name] {
+			return fmt.Errorf("duplicate group %s", name)
+		}
+		seen[name] = true
 	}
 	return nil
 }
 
+// Parse runs the parser over one email. An email that isn't from the sender
+// or doesn't match isn't an error; an email that matches but can't produce
+// exactly one valid transaction is.
 func (p Parser) Parse(sender, subject, body string) (Preview, error) {
 	if err := p.Validate(); err != nil {
 		return Preview{}, err
 	}
-	if !strings.EqualFold(strings.TrimSpace(sender), strings.TrimSpace(p.Sender)) || !regexp.MustCompile(p.Subject).MatchString(subject) {
+	fromSender := strings.EqualFold(strings.TrimSpace(sender), strings.TrimSpace(p.Sender))
+	if !fromSender || !regexp.MustCompile(p.Subject).MatchString(subject) {
 		return Preview{}, nil
 	}
 	re := regexp.MustCompile(p.Pattern)
@@ -149,11 +126,11 @@ func (p Parser) Parse(sender, subject, body string) (Preview, error) {
 		}
 		return strings.TrimSpace(matches[0][i])
 	}
-	amount, err := MinorUnits(get("amount"))
+	amount, err := ledger.MinorUnits(get("amount"))
 	if err != nil {
 		return Preview{Matched: true}, err
 	}
-	if !lastFour.MatchString(get("account")) || get("merchant") == "" {
+	if !ledger.LastFour.MatchString(get("account")) || get("merchant") == "" {
 		return Preview{Matched: true}, errors.New("merchant and exactly four account digits are required")
 	}
 	loc, _ := time.LoadLocation(p.Timezone)
@@ -166,7 +143,7 @@ func (p Parser) Parse(sender, subject, body string) (Preview, error) {
 		currency = p.Currency
 	}
 	currency = strings.ToUpper(currency)
-	if !currencies[currency] {
+	if !ledger.Currencies[currency] {
 		return Preview{Matched: true}, errors.New("unsupported currency")
 	}
 	direction := strings.ToLower(get("direction"))
@@ -184,5 +161,17 @@ func (p Parser) Parse(sender, subject, body string) (Preview, error) {
 	if kind == "" {
 		kind = "unknown"
 	}
-	return Preview{Matched: true, Transaction: &Transaction{AccountID: accountKey(issuer, kind, get("account")), AccountKind: kind, Merchant: get("merchant"), Account: get("account"), Amount: amount, Currency: currency, Direction: direction, Date: date.Format(time.RFC3339), Reference: get("reference"), Status: "provisional", Issuer: issuer}}, nil
+	return Preview{Matched: true, Transaction: &ledger.Transaction{
+		AccountID:   ledger.AccountKey(issuer, kind, get("account")),
+		AccountKind: kind,
+		Merchant:    get("merchant"),
+		Account:     get("account"),
+		Amount:      amount,
+		Currency:    currency,
+		Direction:   direction,
+		Date:        date.Format(time.RFC3339),
+		Reference:   get("reference"),
+		Status:      "provisional",
+		Issuer:      issuer,
+	}}, nil
 }
