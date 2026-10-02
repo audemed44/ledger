@@ -15,6 +15,10 @@ import (
 	"github.com/emersion/go-imap/server"
 )
 
+func datedMail(id, date string) []byte {
+	return append([]byte("Date: "+date+"\r\n"), testMail(id, testBody)...)
+}
+
 func TestIMAPLabelCursorBackfillAndPeek(t *testing.T) {
 	for _, backfill := range []bool{false, true} {
 		name := "new-mail-only"
@@ -34,7 +38,11 @@ func TestIMAPLabelCursorBackfillAndPeek(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			if e = mailbox.CreateMessage(nil, time.Now(), bytes.NewReader(testMail("old", testBody))); e != nil {
+			if e = mailbox.CreateMessage(nil, time.Now(), bytes.NewReader(datedMail("old", "Thu, 01 Jan 2026 00:00:00 +0530"))); e != nil {
+				t.Fatal(e)
+			}
+			// Old sent dates must be skipped even when recently added to the label.
+			if e = mailbox.CreateMessage(nil, time.Now(), bytes.NewReader(datedMail("pre-cutoff", "Wed, 31 Dec 2025 23:59:59 +0530"))); e != nil {
 				t.Fatal(e)
 			}
 			listener, e := net.Listen("tcp", "127.0.0.1:0")
@@ -72,7 +80,7 @@ func TestIMAPLabelCursorBackfillAndPeek(t *testing.T) {
 				t.Fatalf("initial: %d %v", len(rows), e)
 			}
 			// Append through the protocol, then resume with the existing baseline.
-			if e = c.Append("Bank", nil, time.Now(), bytes.NewReader(testMail("new", testBody))); e != nil {
+			if e = c.Append("Bank", nil, time.Now(), bytes.NewReader(datedMail("new", "Fri, 02 Jan 2026 00:00:00 +0530"))); e != nil {
 				t.Fatal(e)
 			}
 			if e = p.syncMailbox(c); e != nil {

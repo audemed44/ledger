@@ -1,7 +1,6 @@
 package ledger
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
@@ -15,17 +14,16 @@ import (
 	"os"
 	"path/filepath"
 
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
-	_ "github.com/emersion/go-message/charset"
-	"github.com/emersion/go-message/mail"
 )
 
 const maxMail = 25 << 20
+const backfillStart = "2026-01-01"
+const beforeBackfillReason = "Before 1 January 2026 backfill start"
 
 // MIME is archived intact, including every attachment, before the DB is updated.
 // File names come from a hash, never a sender-controlled path or Message-ID.
@@ -36,64 +34,10 @@ func (s *Store) Ingest(raw []byte) (int64, error) {
 	hash := sha256.Sum256(raw)
 	key := hex.EncodeToString(hash[:])
 	m := Message{Key: "sha256:" + key, Archive: key + ".eml", Date: time.Now().UTC().Format(time.RFC3339)}
-	reader, err := mail.CreateReader(bytes.NewReader(raw))
-	if err != nil {
-		m.Reason = "MIME: unable to decode message; original archived"
-	} else {
-		defer reader.Close()
-		if id, e := reader.Header.MessageID(); e == nil && id != "" {
-			m.Key = "message-id:" + id
-		}
-		m.Subject, _ = reader.Header.Subject()
-		if addrs, e := reader.Header.AddressList("From"); e == nil && len(addrs) == 1 {
-			m.Sender = addrs[0].Address
-		}
-		if date, e := reader.Header.Date(); e == nil {
-			m.Date = date.Format(time.RFC3339)
-		}
-		var plain strings.Builder
-		pdf := false
-		for {
-			part, e := reader.NextPart()
-			if e == io.EOF {
-				break
-			}
-			if e != nil {
-				m.Reason = "MIME: unable to decode a part; original archived"
-				break
-			}
-			switch h := part.Header.(type) {
-			case *mail.InlineHeader:
-				kind, _, _ := h.ContentType()
-				if kind == "text/plain" || kind == "" {
-					b, e := io.ReadAll(io.LimitReader(part.Body, 1<<20+1))
-					if e != nil || len(b) > 1<<20 {
-						m.Reason = "MIME: text part too large or unreadable"
-						break
-					}
-					plain.Write(b)
-					plain.WriteByte('\n')
-				}
-			case *mail.AttachmentHeader:
-				kind, _, _ := h.ContentType()
-				name, _ := h.Filename()
-				if kind == "application/pdf" || strings.HasSuffix(strings.ToLower(name), ".pdf") {
-					pdf = true
-				}
-			}
-		}
-		m.Body = plain.String()
-		if m.Reason == "" {
-			if pdf {
-				m.Reason = "Statement attachment — PDF parsing arrives in phase 2"
-			} else if strings.TrimSpace(m.Body) == "" {
-				m.Reason = "MIME: no plain-text body; original archived"
-			}
-		}
-	}
+	m = decodeMail(raw, m)
 	// The same mail may be fetched after a crash or a UIDVALIDITY change.
 	var id int64
-	err = s.DB.QueryRow("SELECT id FROM messages WHERE message_key=?", m.Key).Scan(&id)
+	err := s.DB.QueryRow("SELECT id FROM messages WHERE message_key=?", m.Key).Scan(&id)
 	if err == nil {
 		return id, s.Process(id)
 	}
@@ -261,6 +205,9 @@ func (p *Poller) syncMailbox(c *client.Client) error {
 		return nil
 	}
 	criteria := imap.NewSearchCriteria()
+	// SENTSINCE uses the email's calendar date, including the boundary day.
+	// Apply it on resumed backfills and UIDVALIDITY resets as well.
+	criteria.SentSince, _ = time.Parse("2006-01-02", backfillStart)
 	criteria.Uid = new(imap.SeqSet)
 	criteria.Uid.AddRange(cur.UID+1, 0)
 	uids, err := c.UidSearch(criteria)

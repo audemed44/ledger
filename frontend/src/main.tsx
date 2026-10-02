@@ -22,6 +22,8 @@ import "@fontsource/inter/latin-700.css";
 import "@fontsource/inter/latin-800.css";
 import "@fontsource/geist-mono/latin-400.css";
 import "./styles.css";
+import { MessageReview } from "./MessageReview";
+import { StatementParsers } from "./StatementParsers";
 import { api, money, dateLabel, blankParser, samplePattern } from "./api";
 import type {
   Parser,
@@ -36,7 +38,7 @@ type Page = "transactions" | "inbox" | "parsers" | "connection";
 const pages: Page[] = ["transactions", "inbox", "parsers", "connection"];
 const labels = {
   transactions: "Transactions",
-  inbox: "Needs a parser",
+  inbox: "Inbox",
   parsers: "Parsers",
   connection: "Connection",
 };
@@ -107,6 +109,7 @@ export function App() {
       ? (location.hash.slice(1) as Page)
       : "transactions",
   );
+  const [reviewing, setReviewing] = useState<Message | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null),
     [sync, setSync] = useState<Sync | null>(null),
     [version, setVersion] = useState(0),
@@ -347,7 +350,7 @@ export function App() {
                 href="#inbox"
               >
                 <span class="eyebrow">
-                  Needs a parser <ArrowUpRight size={13} />
+                  Needs review <ArrowUpRight size={13} />
                 </span>
                 <div class="figure-value">
                   {String(summary.queued).padStart(2, "0")}
@@ -366,16 +369,18 @@ export function App() {
           <Queue
             version={version}
             refresh={refresh}
-            edit={(m) =>
-              setEditing({
-                parser: { ...blankParser, sender: m.sender },
-                message: m,
-              })
-            }
+            parserCount={summary.parsers}
+            edit={setReviewing}
           />
         )}
         {page === "parsers" && (
-          <Parsers version={version} edit={(p) => setEditing({ parser: p })} />
+          <>
+            <Parsers
+              version={version}
+              edit={(p) => setEditing({ parser: p })}
+            />
+            <StatementParsers />
+          </>
         )}
         {page === "connection" && (
           <Connection sync={sync} busy={busy} syncNow={syncNow} />
@@ -401,6 +406,19 @@ export function App() {
           <ArrowUpRight size={12} />
         </a>
       </footer>
+      {reviewing && (
+        <MessageReview
+          message={reviewing}
+          close={() => setReviewing(null)}
+          createParser={() => {
+            setEditing({
+              parser: { ...blankParser, sender: reviewing.sender },
+              message: reviewing,
+            });
+            setReviewing(null);
+          }}
+        />
+      )}
       {editing && (
         <Editor
           initial={editing.parser}
@@ -488,7 +506,15 @@ function Transactions({
           >
             <option value="">All accounts</option>
             {summary.accounts.map((a) => (
-              <option>{a}</option>
+              <option key={a.id} value={a.id}>
+                {a.issuer} ·{" "}
+                {a.kind === "card"
+                  ? "Card"
+                  : a.kind === "bank"
+                    ? "Bank account"
+                    : "Account"}{" "}
+                •• {a.last_four}
+              </option>
             ))}
           </select>
         </Field>
@@ -546,7 +572,13 @@ function Transactions({
                 <div>
                   <strong>{t.merchant}</strong>
                   <div class="hint">
-                    {t.issuer} <span class="mono">•• {t.account}</span>
+                    {t.issuer} ·{" "}
+                    {t.account_kind === "bank"
+                      ? "Bank"
+                      : t.account_kind === "card"
+                        ? "Card"
+                        : "Account"}{" "}
+                    <span class="mono">•• {t.account}</span>
                   </div>
                 </div>
               </div>
@@ -610,7 +642,9 @@ function Queue({
   version,
   refresh,
   edit,
+  parserCount,
 }: {
+  parserCount: number;
   version: number;
   refresh: () => void;
   edit: (m: Message) => void;
@@ -626,7 +660,7 @@ function Queue({
   }, [version]);
   return (
     <section>
-      <Section index="01" title="Needs a parser">
+      <Section index="01" title="Needs review">
         <button
           class="btn"
           disabled={busy}
@@ -647,6 +681,13 @@ function Queue({
           <RefreshCw size={14} class={busy ? "spin" : ""} /> Retry backlog
         </button>
       </Section>
+      {parserCount === 0 && (
+        <div class="notice">
+          Mail is arriving, but no alert parsers have been configured yet. Open
+          Review to read an email, then choose Create alert parser. PDF
+          statements use a separate parser.
+        </div>
+      )}
       <ErrorNote error={error} />
       {notice && (
         <p class="notice" role="status">
@@ -833,12 +874,12 @@ function Connection({
               Add your Gmail address and app password to the stack’s{" "}
               <code>.env</code>, then restart Ledger. Set{" "}
               <code>LEDGER_BACKFILL=true</code> before the first sync to import
-              existing mail.
+              existing mail dated 1 January 2026 onward.
             </li>
             <li>
               Open{" "}
               <a class="text-link" href="#inbox">
-                Needs a parser
+                Needs review
               </a>{" "}
               to teach Ledger each bank’s format.
             </li>
@@ -944,7 +985,7 @@ function Editor({
       <div class="editor-body">
         <div class="editor-fields">
           <div class="two-col">
-            <Field label="Issuer name">
+            <Field label="Parser name">
               <input
                 value={parser.name}
                 onInput={(e) => update("name", e.currentTarget.value)}
@@ -957,6 +998,28 @@ function Editor({
                 onInput={(e) => update("sender", e.currentTarget.value)}
                 placeholder="alerts@your-bank.com"
               />
+            </Field>
+          </div>
+          <div class="two-col">
+            <Field
+              label="Issuer / bank"
+              hint="Use the same issuer for all rules from this bank (for example, HDFC)."
+            >
+              <input
+                value={parser.issuer || ""}
+                placeholder="HDFC"
+                onInput={(e) => update("issuer", e.currentTarget.value)}
+              />
+            </Field>
+            <Field label="Account type">
+              <select
+                value={parser.account_kind || "unknown"}
+                onChange={(e) => update("account_kind", e.currentTarget.value)}
+              >
+                <option value="card">Credit card</option>
+                <option value="bank">Bank account</option>
+                <option value="unknown">Unknown (legacy rule)</option>
+              </select>
             </Field>
           </div>
           <Field
@@ -1087,14 +1150,18 @@ function Editor({
               <p class="hint">{message.sender}</p>
             </div>
           )}
-          <Field label="Plain-text email">
+          <Field label="Email text">
             <textarea
               class="mono sample"
               value={body}
               readOnly={!!message}
               onInput={(e) => setBody(e.currentTarget.value)}
               spellcheck={false}
-              placeholder="Use the synthetic example, or open a message from the queue."
+              placeholder={
+                message
+                  ? "No readable text was extracted from this email."
+                  : "Use the synthetic example, or open a message from the queue."
+              }
             />
           </Field>
           <div class="preview">
@@ -1113,8 +1180,13 @@ function Editor({
                 </div>
                 <h3>{preview.transaction.merchant}</h3>
                 <p class="hint">
-                  {preview.transaction.issuer} · ••{" "}
-                  {preview.transaction.account}
+                  {preview.transaction.issuer} ·{" "}
+                  {preview.transaction.account_kind === "bank"
+                    ? "Bank account"
+                    : preview.transaction.account_kind === "card"
+                      ? "Credit card"
+                      : "Account"}{" "}
+                  · •• {preview.transaction.account}
                 </p>
                 <p class="hint">
                   {dateLabel(preview.transaction.date)} ·{" "}

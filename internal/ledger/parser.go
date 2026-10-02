@@ -10,30 +10,34 @@ import (
 )
 
 type Parser struct {
-	ID         int64  `json:"id" yaml:"-"`
-	Name       string `json:"name"`
-	Sender     string `json:"sender"`
-	Subject    string `json:"subject"`
-	Pattern    string `json:"pattern"`
-	DateLayout string `json:"date_layout" yaml:"date_layout"`
-	Timezone   string `json:"timezone"`
-	Currency   string `json:"currency"`
-	Direction  string `json:"direction"`
-	Enabled    bool   `json:"enabled"`
+	Issuer      string `json:"issuer"`
+	AccountKind string `json:"account_kind" yaml:"account_kind"`
+	ID          int64  `json:"id" yaml:"-"`
+	Name        string `json:"name"`
+	Sender      string `json:"sender"`
+	Subject     string `json:"subject"`
+	Pattern     string `json:"pattern"`
+	DateLayout  string `json:"date_layout" yaml:"date_layout"`
+	Timezone    string `json:"timezone"`
+	Currency    string `json:"currency"`
+	Direction   string `json:"direction"`
+	Enabled     bool   `json:"enabled"`
 }
 
 type Transaction struct {
-	ID        int64  `json:"id"`
-	MessageID int64  `json:"message_id"`
-	Merchant  string `json:"merchant"`
-	Account   string `json:"account"`
-	Amount    int64  `json:"amount"`
-	Currency  string `json:"currency"`
-	Direction string `json:"direction"`
-	Date      string `json:"date"`
-	Reference string `json:"reference"`
-	Status    string `json:"status"`
-	Issuer    string `json:"issuer"`
+	AccountID   string `json:"account_id"`
+	AccountKind string `json:"account_kind"`
+	ID          int64  `json:"id"`
+	MessageID   int64  `json:"message_id"`
+	Merchant    string `json:"merchant"`
+	Account     string `json:"account"`
+	Amount      int64  `json:"amount"`
+	Currency    string `json:"currency"`
+	Direction   string `json:"direction"`
+	Date        string `json:"date"`
+	Reference   string `json:"reference"`
+	Status      string `json:"status"`
+	Issuer      string `json:"issuer"`
 }
 
 type Preview struct {
@@ -65,6 +69,13 @@ func MinorUnits(value string) (int64, error) {
 }
 
 func (p Parser) Validate() error {
+	if len(p.Issuer) > 100 || strings.ContainsRune(p.Issuer, 0) {
+		return errors.New("invalid issuer")
+	}
+	if p.AccountKind != "" && p.AccountKind != "unknown" && p.AccountKind != "card" && p.AccountKind != "bank" {
+		return errors.New("account type must be card or bank")
+	}
+
 	if strings.TrimSpace(p.Name) == "" || len(p.Name) > 100 || !strings.Contains(p.Sender, "@") {
 		return errors.New("issuer name and exact sender email are required")
 	}
@@ -165,5 +176,13 @@ func (p Parser) Parse(sender, subject, body string) (Preview, error) {
 	if direction != "debit" && direction != "credit" {
 		return Preview{Matched: true}, errors.New("captured direction must be debit or credit")
 	}
-	return Preview{Matched: true, Transaction: &Transaction{Merchant: get("merchant"), Account: get("account"), Amount: amount, Currency: currency, Direction: direction, Date: date.Format(time.RFC3339), Reference: get("reference"), Status: "provisional", Issuer: p.Name}}, nil
+	issuer := strings.TrimSpace(p.Issuer)
+	if issuer == "" {
+		issuer = p.Name
+	}
+	kind := p.AccountKind
+	if kind == "" {
+		kind = "unknown"
+	}
+	return Preview{Matched: true, Transaction: &Transaction{AccountID: accountKey(issuer, kind, get("account")), AccountKind: kind, Merchant: get("merchant"), Account: get("account"), Amount: amount, Currency: currency, Direction: direction, Date: date.Format(time.RFC3339), Reference: get("reference"), Status: "provisional", Issuer: issuer}}, nil
 }

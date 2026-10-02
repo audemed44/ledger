@@ -28,6 +28,7 @@ type Server struct {
 	SecureCookies bool
 	Demo          bool
 	Files         fs.FS
+	PDFPasswords  []string
 }
 
 func (s *Server) cookie() string {
@@ -62,6 +63,7 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 }
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	s.pdfRoutes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	mux.HandleFunc("POST /api/login", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
@@ -101,7 +103,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /api/messages/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
-		m, err := s.Store.Message(id)
+		m, err := s.Store.ReviewMessage(id)
 		if errors.Is(err, sql.ErrNoRows) {
 			failure(w, 404, "Message not found")
 			return
@@ -247,17 +249,17 @@ type Total struct {
 	Credit   int64  `json:"credit"`
 }
 type Summary struct {
-	Totals       []Total  `json:"totals"`
-	Accounts     []string `json:"accounts"`
-	Transactions int      `json:"transactions"`
-	Queued       int      `json:"queued"`
-	Parsers      int      `json:"parsers"`
-	Month        string   `json:"month"`
-	Demo         bool     `json:"demo"`
+	Totals       []Total   `json:"totals"`
+	Accounts     []Account `json:"accounts"`
+	Transactions int       `json:"transactions"`
+	Queued       int       `json:"queued"`
+	Parsers      int       `json:"parsers"`
+	Month        string    `json:"month"`
+	Demo         bool      `json:"demo"`
 }
 
 func (s *Server) getSummary() (Summary, error) {
-	out := Summary{Totals: []Total{}, Accounts: []string{}, Month: time.Now().Format("2006-01"), Demo: s.Demo}
+	out := Summary{Totals: []Total{}, Accounts: []Account{}, Month: time.Now().Format("2006-01"), Demo: s.Demo}
 	for _, c := range []struct {
 		query string
 		dest  *int
@@ -283,19 +285,8 @@ func (s *Server) getSummary() (Summary, error) {
 	if err != nil {
 		return out, err
 	}
-	rows, err = s.Store.DB.Query("SELECT DISTINCT issuer || ' · ' || account FROM transactions ORDER BY 1")
-	if err != nil {
-		return out, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var a string
-		if err = rows.Scan(&a); err != nil {
-			return out, err
-		}
-		out.Accounts = append(out.Accounts, a)
-	}
-	return out, rows.Err()
+	out.Accounts, err = s.Store.accounts()
+	return out, err
 }
 func (s *Server) summary(w http.ResponseWriter, r *http.Request) {
 	out, err := s.getSummary()
@@ -318,7 +309,7 @@ func (s *Server) widget(w http.ResponseWriter, r *http.Request) {
 	if len(stats) == 0 {
 		stats = append(stats, map[string]string{"label": "Debits this month", "value": "—", "caption": "No alerts yet"})
 	}
-	stats = append(stats, map[string]string{"label": "Needs a parser", "value": strconv.Itoa(out.Queued)})
+	stats = append(stats, map[string]string{"label": "Needs review", "value": strconv.Itoa(out.Queued)})
 	jsonResponse(w, map[string]any{"version": 1, "stats": stats, "items_layout": "list", "items": []any{}, "progress": []any{}})
 }
 func decimal(v int64) string { return fmt.Sprintf("%d.%02d", v/100, v%100) }
@@ -333,7 +324,7 @@ func (s *Server) csv(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="ledger-transactions.csv"`)
 	writer := csv.NewWriter(w)
 	defer writer.Flush()
-	writer.Write([]string{"Date", "Issuer", "Account", "Merchant", "Amount", "Currency", "Direction", "Status", "Reference"})
+	writer.Write([]string{"Date", "Issuer", "Account", "Account type", "Merchant", "Amount", "Currency", "Direction", "Status", "Reference"})
 	f := filter(r)
 	f.Offset = 0
 	for {
@@ -342,7 +333,7 @@ func (s *Server) csv(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, t := range rows {
-			record := []string{t.Date, t.Issuer, t.Account, t.Merchant, decimal(t.Amount), t.Currency, t.Direction, t.Status, t.Reference}
+			record := []string{t.Date, t.Issuer, t.Account, t.AccountKind, t.Merchant, decimal(t.Amount), t.Currency, t.Direction, t.Status, t.Reference}
 			for i := range record {
 				record[i] = csvSafe(record[i])
 			}

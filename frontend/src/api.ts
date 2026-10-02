@@ -1,4 +1,6 @@
 export type Parser = {
+  issuer?: string;
+  account_kind?: string;
   id: number;
   name: string;
   sender: string;
@@ -11,6 +13,8 @@ export type Parser = {
   enabled: boolean;
 };
 export type Transaction = {
+  account_id?: string;
+  account_kind?: string;
   id: number;
   message_id: number;
   merchant: string;
@@ -31,10 +35,15 @@ export type Message = {
   body?: string;
   state: string;
   reason: string;
+  body_format?: "plain" | "html";
+  attachments?: { part: number; name: string; content_type: string }[];
+  has_pdf?: boolean;
+  can_parse?: boolean;
+  content_error?: string;
 };
 export type Summary = {
   totals: { currency: string; debit: number; credit: number }[];
-  accounts: string[];
+  accounts: { id: string; issuer: string; kind: string; last_four: string }[];
   transactions: number;
   queued: number;
   parsers: number;
@@ -83,6 +92,8 @@ export function dateLabel(value: string) {
   });
 }
 export const blankParser: Parser = {
+  issuer: "",
+  account_kind: "card",
   id: 0,
   name: "",
   sender: "",

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -19,15 +20,20 @@ type Store struct {
 }
 
 type Message struct {
-	ID      int64  `json:"id"`
-	Key     string `json:"-"`
-	Sender  string `json:"sender"`
-	Subject string `json:"subject"`
-	Date    string `json:"date"`
-	Body    string `json:"body,omitempty"`
-	State   string `json:"state"`
-	Reason  string `json:"reason"`
-	Archive string `json:"-"`
+	ID           int64        `json:"id"`
+	Key          string       `json:"-"`
+	Sender       string       `json:"sender"`
+	Subject      string       `json:"subject"`
+	Date         string       `json:"date"`
+	Body         string       `json:"body,omitempty"`
+	State        string       `json:"state"`
+	Reason       string       `json:"reason"`
+	Archive      string       `json:"-"`
+	BodyFormat   string       `json:"body_format,omitempty"`
+	Attachments  []Attachment `json:"attachments,omitempty"`
+	HasPDF       bool         `json:"has_pdf,omitempty"`
+	CanParse     bool         `json:"can_parse"`
+	ContentError string       `json:"content_error,omitempty"`
 }
 
 func Open(dir string) (*Store, error) {
@@ -47,6 +53,7 @@ func Open(dir string) (*Store, error) {
 	_, err = db.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;
  CREATE TABLE IF NOT EXISTS messages(id INTEGER PRIMARY KEY, message_key TEXT UNIQUE NOT NULL, sender TEXT NOT NULL, subject TEXT NOT NULL, date TEXT NOT NULL, body TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'queued', reason TEXT NOT NULL DEFAULT '', archive TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS parsers(id INTEGER PRIMARY KEY, definition TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS statement_parsers(id INTEGER PRIMARY KEY, definition TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS transactions(id INTEGER PRIMARY KEY, message_id INTEGER UNIQUE NOT NULL REFERENCES messages(id), merchant TEXT NOT NULL, account TEXT NOT NULL, amount INTEGER NOT NULL CHECK(amount>0), currency TEXT NOT NULL, direction TEXT NOT NULL, date TEXT NOT NULL, reference TEXT NOT NULL, status TEXT NOT NULL, issuer TEXT NOT NULL);
  CREATE INDEX IF NOT EXISTS transactions_date ON transactions(date);
  CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);`)
@@ -58,7 +65,21 @@ func Open(dir string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{DB: db, Dir: dir}, nil
+	store := &Store{DB: db, Dir: dir}
+	if err := store.migrateAccountKinds(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	// Keep archives and imported transactions; retire only older pending mail.
+	if _, err := db.Exec("UPDATE messages SET state='excluded',reason=? WHERE state='queued' AND substr(date,1,10) < ? AND date GLOB '????-??-??T*' AND date NOT LIKE '0001-%'", beforeBackfillReason, backfillStart); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := store.recoverArchivedText(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return store, nil
 }
 
 func (s *Store) Parsers() ([]Parser, error) {
@@ -145,6 +166,10 @@ func (s *Store) Process(id int64) error {
 	if m.State != "queued" {
 		return nil
 	}
+	if date, e := time.Parse(time.RFC3339, m.Date); e == nil && !date.IsZero() && date.Format("2006-01-02") < backfillStart {
+		_, err = s.DB.Exec("UPDATE messages SET state='excluded',reason=? WHERE id=?", beforeBackfillReason, id)
+		return err
+	}
 	// MIME failures and statements cannot accidentally become alert transactions.
 	if strings.HasPrefix(m.Reason, "MIME:") || m.Reason == "Statement attachment — PDF parsing arrives in phase 2" {
 		return nil
@@ -186,7 +211,7 @@ func (s *Store) Process(id int64) error {
 	state := "ignored"
 	if t := chosen.Transaction; t != nil {
 		state = "parsed"
-		_, err = tx.Exec("INSERT INTO transactions(message_id,merchant,account,amount,currency,direction,date,reference,status,issuer) VALUES(?,?,?,?,?,?,?,?,?,?)", id, t.Merchant, t.Account, t.Amount, t.Currency, t.Direction, t.Date, t.Reference, t.Status, t.Issuer)
+		_, err = tx.Exec("INSERT INTO transactions(message_id,merchant,account,amount,currency,direction,date,reference,status,issuer,account_kind) VALUES(?,?,?,?,?,?,?,?,?,?,?)", id, t.Merchant, t.Account, t.Amount, t.Currency, t.Direction, t.Date, t.Reference, t.Status, t.Issuer, t.AccountKind)
 		if err != nil {
 			return err
 		}
@@ -197,6 +222,13 @@ func (s *Store) Process(id int64) error {
 	return tx.Commit()
 }
 func (s *Store) Reprocess() (int, error) {
+	s.mu.Lock()
+	err := s.recoverQueuedText(false)
+	s.mu.Unlock()
+	if err != nil {
+		return 0, err
+	}
+
 	// Keyset batches cover the whole backlog without loading mail bodies into memory.
 	var last int64
 	count := 0
@@ -238,7 +270,7 @@ type Filter struct {
 }
 
 func (s *Store) Transactions(f Filter) ([]Transaction, error) {
-	query := `SELECT id,message_id,merchant,account,amount,currency,direction,date,reference,status,issuer FROM transactions WHERE 1=1`
+	query := `SELECT id,message_id,merchant,account,amount,currency,direction,date,reference,status,issuer,account_kind FROM transactions WHERE 1=1`
 	args := []any{}
 	if f.Search != "" {
 		query += " AND (merchant LIKE ? OR reference LIKE ? OR issuer LIKE ?)"
@@ -246,8 +278,14 @@ func (s *Store) Transactions(f Filter) ([]Transaction, error) {
 		args = append(args, v, v, v)
 	}
 	if f.Account != "" {
-		query += " AND issuer || ' · ' || account=?"
-		args = append(args, f.Account)
+		parts, err := accountParts(f.Account)
+		if err == nil {
+			query += " AND lower(trim(issuer))=? AND account_kind=? AND account=?"
+			args = append(args, parts[0], parts[1], parts[2])
+		} else {
+			query += " AND issuer || ' · ' || account=?"
+			args = append(args, f.Account)
+		}
 	}
 	if f.Status != "" {
 		query += " AND status=?"
@@ -271,9 +309,10 @@ func (s *Store) Transactions(f Filter) ([]Transaction, error) {
 	out := []Transaction{}
 	for rows.Next() {
 		var t Transaction
-		if err = rows.Scan(&t.ID, &t.MessageID, &t.Merchant, &t.Account, &t.Amount, &t.Currency, &t.Direction, &t.Date, &t.Reference, &t.Status, &t.Issuer); err != nil {
+		if err = rows.Scan(&t.ID, &t.MessageID, &t.Merchant, &t.Account, &t.Amount, &t.Currency, &t.Direction, &t.Date, &t.Reference, &t.Status, &t.Issuer, &t.AccountKind); err != nil {
 			return nil, err
 		}
+		t.AccountID = accountKey(t.Issuer, t.AccountKind, t.Account)
 		out = append(out, t)
 	}
 	return out, rows.Err()
