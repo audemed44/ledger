@@ -1,0 +1,17 @@
+services:
+  ledger:
+    image: ghcr.io/audemed44/ledger:latest
+    restart: unless-stopped
+    ports:
+      - "8087:8080"
+    environment:
+      LEDGER_TOKEN: ${LEDGER_TOKEN:?Set LEDGER_TOKEN}
+      GMAIL_USER: ${GMAIL_USER:-}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+      GMAIL_LABEL: ${GMAIL_LABEL:-Bank}
+      LEDGER_POLL_INTERVAL: ${LEDGER_POLL_INTERVAL:-15m}
+      LEDGER_BACKFILL: ${LEDGER_BACKFILL:-false}
+      LEDGER_SECURE_COOKIES: ${LEDGER_SECURE_COOKIES:-true}
+      TZ: ${TZ:-Asia/Kolkata}
+    volumes:
+      - ./data:/data
