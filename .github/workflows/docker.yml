@@ -1,31 +1,56 @@
 name: Docker
+
 on:
   push:
     branches: [main]
     tags: ['v*']
+
 jobs:
-  publish:
+  build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/metadata-action@v5
+
+      - name: Docker metadata
         id: meta
+        uses: docker/metadata-action@v5
         with:
           images: ghcr.io/audemed44/ledger
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag
-      - uses: docker/build-push-action@v6
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  cleanup:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    steps:
+      - name: Delete old package versions
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ledger
+          package-type: container
+          min-versions-to-keep: 5
+          ignore-versions: '^v'
