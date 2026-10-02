@@ -1,0 +1,8 @@
+.git
+.env
+.env.*
+data
+frontend/node_modules
+web/dist
+ledger
+*.png
