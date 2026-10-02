@@ -8,10 +8,12 @@ export function MessageReview({
   message,
   close,
   createParser,
+  imported,
 }: {
   message: Message;
   close: () => void;
   createParser: () => void;
+  imported?: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -59,7 +61,7 @@ export function MessageReview({
             {message.content_error}
           </div>
         )}
-        {message.has_pdf && <PDFReview message={message} />}
+        {message.has_pdf && <PDFReview message={message} imported={imported} />}
         {message.body?.trim() ? (
           <label class="field">
             <span class="eyebrow">

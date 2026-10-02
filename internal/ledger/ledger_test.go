@@ -137,7 +137,7 @@ func TestAttachmentAndMalformedMIMEAreRetained(t *testing.T) {
 		t.Fatal(e)
 	}
 	m, _ := s.Message(id)
-	if m.State != "queued" || !strings.Contains(m.Reason, "Statement") {
+	if m.State != "queued" || !m.HasPDF {
 		t.Fatalf("%+v", m)
 	}
 	s.Reprocess()

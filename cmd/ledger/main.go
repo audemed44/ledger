@@ -57,8 +57,8 @@ func main() {
 	demo := flag.Bool("demo", false, "seed synthetic examples; disables Gmail")
 	flag.Parse()
 	token := os.Getenv("LEDGER_TOKEN")
-	if len(token) < 24 {
-		log.Fatal("LEDGER_TOKEN must contain at least 24 characters")
+	if len(token) < 4 {
+		log.Fatal("LEDGER_TOKEN must contain at least 4 characters")
 	}
 	interval, err := time.ParseDuration(env("LEDGER_POLL_INTERVAL", "15m"))
 	if err != nil || interval < time.Minute {

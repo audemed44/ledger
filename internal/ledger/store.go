@@ -70,6 +70,14 @@ func Open(dir string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if err := store.migrateStatementImports(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := store.mergeDuplicateStatementParsers(); err != nil {
+		db.Close()
+		return nil, err
+	}
 	// Keep archives and imported transactions; retire only older pending mail.
 	if _, err := db.Exec("UPDATE messages SET state='excluded',reason=? WHERE state='queued' AND substr(date,1,10) < ? AND date GLOB '????-??-??T*' AND date NOT LIKE '0001-%'", beforeBackfillReason, backfillStart); err != nil {
 		db.Close()
@@ -135,8 +143,20 @@ func (s *Store) SaveParser(p Parser) (Parser, error) {
 	}
 	return p, err
 }
-func (s *Store) Messages() ([]Message, error) {
-	rows, err := s.DB.Query("SELECT id,sender,subject,date,state,reason FROM messages WHERE state='queued' ORDER BY id DESC LIMIT 200")
+func (s *Store) Messages() ([]Message, error) { return s.FilteredMessages("") }
+func (s *Store) FilteredMessages(kind string) ([]Message, error) {
+	query := "SELECT id,sender,subject,date,state,reason,has_pdf FROM messages WHERE state='queued'"
+	switch kind {
+	case "pdf":
+		query += " AND has_pdf=1"
+	case "text":
+		query += " AND has_pdf=0"
+	case "", "all":
+	default:
+		return nil, errors.New("Invalid inbox filter")
+	}
+	query += " ORDER BY julianday(date) DESC,id DESC LIMIT 200"
+	rows, err := s.DB.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +164,7 @@ func (s *Store) Messages() ([]Message, error) {
 	out := []Message{}
 	for rows.Next() {
 		var m Message
-		if err = rows.Scan(&m.ID, &m.Sender, &m.Subject, &m.Date, &m.State, &m.Reason); err != nil {
+		if err = rows.Scan(&m.ID, &m.Sender, &m.Subject, &m.Date, &m.State, &m.Reason, &m.HasPDF); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -153,7 +173,7 @@ func (s *Store) Messages() ([]Message, error) {
 }
 func (s *Store) Message(id int64) (Message, error) {
 	var m Message
-	err := s.DB.QueryRow("SELECT id,sender,subject,date,body,state,reason FROM messages WHERE id=?", id).Scan(&m.ID, &m.Sender, &m.Subject, &m.Date, &m.Body, &m.State, &m.Reason)
+	err := s.DB.QueryRow("SELECT id,sender,subject,date,body,state,reason,has_pdf FROM messages WHERE id=?", id).Scan(&m.ID, &m.Sender, &m.Subject, &m.Date, &m.Body, &m.State, &m.Reason, &m.HasPDF)
 	return m, err
 }
 func (s *Store) Process(id int64) error {
@@ -171,7 +191,7 @@ func (s *Store) Process(id int64) error {
 		return err
 	}
 	// MIME failures and statements cannot accidentally become alert transactions.
-	if strings.HasPrefix(m.Reason, "MIME:") || m.Reason == "Statement attachment — PDF parsing arrives in phase 2" {
+	if m.HasPDF || strings.HasPrefix(m.Reason, "MIME:") || m.Reason == "Statement attachment — PDF parsing arrives in phase 2" {
 		return nil
 	}
 	parsers, err := s.Parsers()
@@ -210,6 +230,16 @@ func (s *Store) Process(id int64) error {
 	defer tx.Rollback()
 	state := "ignored"
 	if t := chosen.Transaction; t != nil {
+		var overlaps int
+		if err = tx.QueryRow("SELECT count(*) FROM transactions WHERE statement_id IS NOT NULL AND account=? AND (lower(trim(issuer))=lower(trim(?)) OR ?='unknown') AND (account_kind=? OR ?='unknown') AND amount=? AND currency=? AND direction=? AND substr(date,1,10)=?", t.Account, t.Issuer, t.AccountKind, t.AccountKind, t.AccountKind, t.Amount, t.Currency, t.Direction, t.Date[:10]).Scan(&overlaps); err != nil {
+			return err
+		}
+		if overlaps > 0 {
+			if _, err = tx.Exec("UPDATE messages SET reason=? WHERE id=?", "Possible match to an imported statement transaction; reconciliation required", id); err != nil {
+				return err
+			}
+			return tx.Commit()
+		}
 		state = "parsed"
 		_, err = tx.Exec("INSERT INTO transactions(message_id,merchant,account,amount,currency,direction,date,reference,status,issuer,account_kind) VALUES(?,?,?,?,?,?,?,?,?,?,?)", id, t.Merchant, t.Account, t.Amount, t.Currency, t.Direction, t.Date, t.Reference, t.Status, t.Issuer, t.AccountKind)
 		if err != nil {
