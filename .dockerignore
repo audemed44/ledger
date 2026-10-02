@@ -1,8 +1,8 @@
+frontend/node_modules
+web/dist
 .git
 .env
 .env.*
 data
-frontend/node_modules
-web/dist
-ledger
-*.png
+docs
+/ledger

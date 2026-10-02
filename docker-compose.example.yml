@@ -1,0 +1,29 @@
+# Ledger reads your bank and card emails from one Gmail label and keeps the
+# ledger on your server. Put it in your main stack.
+services:
+  ledger:
+    image: ghcr.io/audemed44/ledger:latest
+    container_name: ledger
+    restart: unless-stopped
+    environment:
+      # openssl rand -hex 32; what you sign in with, and Foyer's widget key.
+      - LEDGER_TOKEN=${LEDGER_TOKEN}
+      - TZ=Asia/Kolkata # where "this month" starts and ends
+      # Gmail address and an app password (no spaces). Leave both out to
+      # run without mail polling.
+      - GMAIL_USER=${GMAIL_USER}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+      - GMAIL_LABEL=Bank # the only label Ledger reads
+      # - LEDGER_POLL_INTERVAL=15m
+      # Import mail already under the label (from 1 January 2026). Only
+      # takes effect on the first sync of a label.
+      # - LEDGER_BACKFILL=true
+      # PDF statement passwords, separated by |. Statement parsers refer to
+      # them by position (Password 1, 2, …); the values never leave the server.
+      - LEDGER_PDF_PASSWORDS=${LEDGER_PDF_PASSWORDS}
+      # Session cookies need HTTPS. Set false only for plain-HTTP testing.
+      # - LEDGER_SECURE_COOKIES=false
+    volumes:
+      - ./ledger:/data # the database and every archived email; back it up
+    ports:
+      - "8087:8080"
