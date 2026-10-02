@@ -26,12 +26,7 @@ html {
 body {
   margin: 0;
   background:
-    radial-gradient(
-      1100px 520px at 12% -12%,
-      rgb(37 99 255 / 0.1),
-      transparent 70%
-    ),
-    var(--bg);
+    radial-gradient(1100px 520px at 12% -12%, rgb(37 99 255 / 0.1), transparent 70%), var(--bg);
   min-height: 100dvh;
 }
 button,

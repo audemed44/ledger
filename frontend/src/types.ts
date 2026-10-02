@@ -1,0 +1,101 @@
+// Shapes of the JSON the server returns.
+export type Parser = {
+  issuer?: string;
+  account_kind?: string;
+  id: number;
+  name: string;
+  sender: string;
+  subject: string;
+  pattern: string;
+  date_layout: string;
+  timezone: string;
+  currency: string;
+  direction: string;
+  enabled: boolean;
+};
+export type Transaction = {
+  account_id?: string;
+  account_kind?: string;
+  id: number;
+  message_id: number;
+  merchant: string;
+  account: string;
+  amount: number;
+  currency: string;
+  direction: string;
+  date: string;
+  reference: string;
+  status: string;
+  issuer: string;
+};
+export type Message = {
+  id: number;
+  sender: string;
+  subject: string;
+  date: string;
+  body?: string;
+  state: string;
+  reason: string;
+  body_format?: "plain" | "html";
+  attachments?: { part: number; name: string; content_type: string }[];
+  has_pdf?: boolean;
+  can_parse?: boolean;
+  content_error?: string;
+};
+export type Summary = {
+  totals: { currency: string; debit: number; credit: number }[];
+  accounts: { id: string; issuer: string; kind: string; last_four: string }[];
+  transactions: number;
+  queued: number;
+  parsers: number;
+  month: string;
+  demo: boolean;
+};
+export type Sync = {
+  configured: boolean;
+  running: boolean;
+  last_sync: string;
+  error: string;
+  label: string;
+  interval: string;
+};
+export type Preview = {
+  matched: boolean;
+  ignored: boolean;
+  transaction?: Transaction;
+};
+export type StatementParser = {
+  balance_tolerance_paise: number;
+  id: number;
+  name: string;
+  adapter: string;
+  password_slot: number;
+};
+export type PDFConfig = {
+  password_slots: number[];
+  adapters: { id: string; name: string; description: string }[];
+};
+export type PDFResult = {
+  fingerprint?: string;
+  imported?: { statement_id: number; count: number; already_imported: boolean };
+  text: string;
+  password_slot: number;
+  parser_name?: string;
+  parse_error?: string;
+  statement?: {
+    transactions: Transaction[];
+    issuer: string;
+    account: string;
+    account_kind: string;
+    date: string;
+    due_date: string;
+    minimum_due: number;
+    opening: number;
+    total_due: number;
+    balanced: boolean;
+    rounding_accepted?: boolean;
+    balance_tolerance_paise?: number;
+    discrepancy: number;
+    warnings: string[];
+  };
+};

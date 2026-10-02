@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "preact/hooks";
 import { ArrowRight, FileText } from "lucide-preact";
-import { dateLabel } from "./api";
-import type { Message } from "./api";
+import { dateLabel } from "../lib";
+import type { Message } from "../types";
 import { PDFReview } from "./PDFReview";
 
 export function MessageReview({
@@ -64,15 +64,8 @@ export function MessageReview({
         {message.has_pdf && <PDFReview message={message} imported={imported} />}
         {message.body?.trim() ? (
           <label class="field">
-            <span class="eyebrow">
-              {message.has_pdf ? "Covering email text" : "Email text"}
-            </span>
-            <textarea
-              class="mono message-text"
-              readOnly
-              value={message.body}
-              spellcheck={false}
-            />
+            <span class="eyebrow">{message.has_pdf ? "Covering email text" : "Email text"}</span>
+            <textarea class="mono message-text" readOnly value={message.body} spellcheck={false} />
           </label>
         ) : (
           <div class="empty">
