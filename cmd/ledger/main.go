@@ -1,21 +1,27 @@
+// Command ledger fills a private finance ledger from bank and card emails in
+// one Gmail label, from one small binary.
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
-	_ "time/tzdata"
+	_ "time/tzdata" // the runtime image may have no zoneinfo; TZ needs this
 
-	"github.com/audemed44/ledger/internal/ledger"
+	"github.com/audemed44/ledger/internal/gmail"
+	"github.com/audemed44/ledger/internal/server"
+	"github.com/audemed44/ledger/internal/statements"
+	"github.com/audemed44/ledger/internal/store"
 	"github.com/audemed44/ledger/web"
 )
 
@@ -25,79 +31,155 @@ func env(key, fallback string) string {
 	}
 	return fallback
 }
-func main() {
-	if len(os.Args) > 1 && os.Args[1] == "check-statement" {
-		flags := flag.NewFlagSet("check-statement", flag.ExitOnError)
-		path := flags.String("pdf", "", "path to local statement PDF")
-		flags.Parse(os.Args[2:])
-		text, err := ledger.ExtractPDF(context.Background(), *path, os.Getenv("LEDGER_PDF_PASSWORD"))
-		if err != nil {
-			log.Fatal(err)
-		}
-		statement, err := ledger.ParseHDFCStatement(text)
-		if err != nil {
-			log.Fatal(err)
-		}
-		debit, credit := 0, 0
-		for _, t := range statement.Transactions {
-			if t.Direction == "debit" {
-				debit++
-			} else {
-				credit++
-			}
-		}
-		json.NewEncoder(os.Stdout).Encode(map[string]any{"issuer": statement.Issuer, "transactions": len(statement.Transactions), "debits": debit, "credits": credit, "row_totals_match": true, "balanced": statement.Balanced, "discrepancy_minor_units": statement.Discrepancy, "warnings": statement.Warnings})
-		if !statement.Balanced {
-			fmt.Fprintln(os.Stderr, "Statement flagged; nothing imported")
-			os.Exit(2)
-		}
-		return
-	}
 
+func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "healthcheck":
+			os.Exit(healthcheck())
+		case "check-statement":
+			os.Exit(checkStatement(os.Args[2:]))
+		}
+	}
 	demo := flag.Bool("demo", false, "seed synthetic examples; disables Gmail")
 	flag.Parse()
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
 	token := os.Getenv("LEDGER_TOKEN")
-	if len(token) < 4 {
-		log.Fatal("LEDGER_TOKEN must contain at least 4 characters")
+	if token == "" {
+		slog.Error("set LEDGER_TOKEN: it's what you sign in with, and what Foyer uses for the widget")
+		os.Exit(1)
+	}
+	if len(token) < 16 {
+		slog.Warn("LEDGER_TOKEN is short; generate a new one with: openssl rand -hex 32")
 	}
 	interval, err := time.ParseDuration(env("LEDGER_POLL_INTERVAL", "15m"))
 	if err != nil || interval < time.Minute {
-		log.Fatal("LEDGER_POLL_INTERVAL must be at least 1m")
+		slog.Error("LEDGER_POLL_INTERVAL must be a duration of at least 1m")
+		os.Exit(1)
 	}
-	store, err := ledger.Open(env("LEDGER_DATA_DIR", "/data"))
+	db, err := store.Open(env("LEDGER_DATA_DIR", "/data"))
 	if err != nil {
-		log.Fatal("Could not open Ledger data directory")
+		slog.Error("could not open the data folder", "err", err)
+		os.Exit(1)
 	}
-	defer store.DB.Close()
-	cfg := ledger.MailConfig{User: os.Getenv("GMAIL_USER"), Password: os.Getenv("GMAIL_APP_PASSWORD"), Label: env("GMAIL_LABEL", "Bank"), Interval: interval, Backfill: env("LEDGER_BACKFILL", "false") == "true"}
+	defer db.Close()
+
+	cfg := gmail.Config{
+		User:     os.Getenv("GMAIL_USER"),
+		Password: os.Getenv("GMAIL_APP_PASSWORD"),
+		Label:    env("GMAIL_LABEL", "Bank"),
+		Interval: interval,
+		Backfill: env("LEDGER_BACKFILL", "false") == "true",
+	}
 	if *demo {
-		cfg.User = ""
-		cfg.Password = ""
-		if err = store.SeedDemo(); err != nil {
-			log.Fatal("Could not seed demo")
+		cfg.User, cfg.Password = "", ""
+		if err = db.SeedDemo(); err != nil {
+			slog.Error("could not seed the demo", "err", err)
+			os.Exit(1)
 		}
 	}
-	poller := &ledger.Poller{Store: store, Config: cfg}
-	assets, err := fs.Sub(web.Files, "dist")
+	poller := &gmail.Poller{Store: db, Config: cfg}
+	dist, err := fs.Sub(web.Dist, "dist")
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
-	app := &ledger.Server{Store: store, Poller: poller, Token: token, SecureCookies: env("LEDGER_SECURE_COOKIES", "true") == "true", Demo: *demo, Files: assets, PDFPasswords: strings.Split(os.Getenv("LEDGER_PDF_PASSWORDS"), "|")}
-	server := &http.Server{Addr: env("LEDGER_LISTEN", ":8080"), Handler: app.Handler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 11 * time.Minute, IdleTimeout: 60 * time.Second}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-	done := make(chan struct{})
-	go func() { defer close(done); poller.Run(ctx) }()
+	app := &server.Server{
+		Store:         db,
+		Poller:        poller,
+		Token:         token,
+		SecureCookies: env("LEDGER_SECURE_COOKIES", "true") == "true",
+		Demo:          *demo,
+		Files:         dist,
+		PDFPasswords:  strings.Split(os.Getenv("LEDGER_PDF_PASSWORDS"), "|"),
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	polling := make(chan struct{})
+	go func() {
+		defer close(polling)
+		poller.Run(ctx)
+	}()
+
+	srv := &http.Server{
+		Addr:              env("LEDGER_LISTEN", ":8080"),
+		Handler:           app.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      11 * time.Minute, // a manual sync can take up to 10
+		IdleTimeout:       60 * time.Second,
+	}
 	go func() {
 		<-ctx.Done()
-		shutdown, c := context.WithTimeout(context.Background(), 15*time.Second)
-		defer c()
-		server.Shutdown(shutdown)
+		shutdown, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdown)
 	}()
-	log.Printf("Ledger listening on %s", server.Addr)
-	if err = server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatal(err)
+	slog.Info("ledger listening", "addr", srv.Addr, "gmail", cfg.User != "" && cfg.Password != "", "demo", *demo)
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		slog.Error("server stopped", "err", err)
+		os.Exit(1)
 	}
-	cancel()
-	<-done
+	stop()
+	<-polling
+}
+
+// healthcheck is the container's HEALTHCHECK.
+func healthcheck() int {
+	client := http.Client{Timeout: 3 * time.Second}
+	port := env("LEDGER_LISTEN", ":8080")
+	port = port[strings.LastIndex(port, ":")+1:]
+	resp, err := client.Get("http://127.0.0.1:" + port + "/healthz")
+	if err != nil {
+		return 1
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 1
+	}
+	return 0
+}
+
+// checkStatement validates a local PDF statement without importing it. The
+// password comes from LEDGER_PDF_PASSWORD. Output holds counts and
+// validation results only: no merchants, account numbers or amounts. It
+// exits 0 when the statement validated and 2 when it needs review.
+func checkStatement(args []string) int {
+	flags := flag.NewFlagSet("check-statement", flag.ExitOnError)
+	path := flags.String("pdf", "", "path to local statement PDF")
+	flags.Parse(args)
+	text, err := statements.Extract(context.Background(), *path, os.Getenv("LEDGER_PDF_PASSWORD"))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	statement, err := statements.ParseHDFC(text)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	debits, credits := 0, 0
+	for _, t := range statement.Transactions {
+		if t.Direction == "debit" {
+			debits++
+		} else {
+			credits++
+		}
+	}
+	json.NewEncoder(os.Stdout).Encode(map[string]any{
+		"issuer":                  statement.Issuer,
+		"transactions":            len(statement.Transactions),
+		"debits":                  debits,
+		"credits":                 credits,
+		"row_totals_match":        true,
+		"balanced":                statement.Balanced,
+		"discrepancy_minor_units": statement.Discrepancy,
+		"warnings":                statement.Warnings,
+	})
+	if !statement.Balanced {
+		fmt.Fprintln(os.Stderr, "Statement flagged; nothing imported")
+		return 2
+	}
+	return 0
 }

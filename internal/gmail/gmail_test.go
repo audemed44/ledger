@@ -1,4 +1,4 @@
-package ledger
+package gmail
 
 import (
 	"bytes"
@@ -13,11 +13,10 @@ import (
 	"github.com/emersion/go-imap/backend/memory"
 	"github.com/emersion/go-imap/client"
 	"github.com/emersion/go-imap/server"
-)
 
-func datedMail(id, date string) []byte {
-	return append([]byte("Date: "+date+"\r\n"), testMail(id, testBody)...)
-}
+	"github.com/audemed44/ledger/internal/fixture"
+	"github.com/audemed44/ledger/internal/store"
+)
 
 func TestIMAPLabelCursorBackfillAndPeek(t *testing.T) {
 	for _, backfill := range []bool{false, true} {
@@ -38,11 +37,11 @@ func TestIMAPLabelCursorBackfillAndPeek(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			if e = mailbox.CreateMessage(nil, time.Now(), bytes.NewReader(datedMail("old", "Thu, 01 Jan 2026 00:00:00 +0530"))); e != nil {
+			if e = mailbox.CreateMessage(nil, time.Now(), bytes.NewReader(fixture.DatedMail("old", "Thu, 01 Jan 2026 00:00:00 +0530"))); e != nil {
 				t.Fatal(e)
 			}
 			// Old sent dates must be skipped even when recently added to the label.
-			if e = mailbox.CreateMessage(nil, time.Now(), bytes.NewReader(datedMail("pre-cutoff", "Wed, 31 Dec 2025 23:59:59 +0530"))); e != nil {
+			if e = mailbox.CreateMessage(nil, time.Now(), bytes.NewReader(fixture.DatedMail("pre-cutoff", "Wed, 31 Dec 2025 23:59:59 +0530"))); e != nil {
 				t.Fatal(e)
 			}
 			listener, e := net.Listen("tcp", "127.0.0.1:0")
@@ -64,14 +63,14 @@ func TestIMAPLabelCursorBackfillAndPeek(t *testing.T) {
 				t.Fatal(e)
 			}
 			s := testStore(t)
-			if _, e = s.SaveParser(testParser()); e != nil {
+			if _, e = s.SaveParser(fixture.AlertParser()); e != nil {
 				t.Fatal(e)
 			}
-			p := Poller{Store: s, Config: MailConfig{User: "username", Label: "Bank", Backfill: backfill}}
+			p := Poller{Store: s, Config: Config{User: "username", Label: "Bank", Backfill: backfill}}
 			if e = p.syncMailbox(c); e != nil {
 				t.Fatal(e)
 			}
-			rows, e := s.Transactions(Filter{})
+			rows, e := s.Transactions(store.Filter{})
 			want := 0
 			if backfill {
 				want = 1
@@ -80,20 +79,20 @@ func TestIMAPLabelCursorBackfillAndPeek(t *testing.T) {
 				t.Fatalf("initial: %d %v", len(rows), e)
 			}
 			// Append through the protocol, then resume with the existing baseline.
-			if e = c.Append("Bank", nil, time.Now(), bytes.NewReader(datedMail("new", "Fri, 02 Jan 2026 00:00:00 +0530"))); e != nil {
+			if e = c.Append("Bank", nil, time.Now(), bytes.NewReader(fixture.DatedMail("new", "Fri, 02 Jan 2026 00:00:00 +0530"))); e != nil {
 				t.Fatal(e)
 			}
 			if e = p.syncMailbox(c); e != nil {
 				t.Fatal(e)
 			}
-			rows, e = s.Transactions(Filter{})
+			rows, e = s.Transactions(store.Filter{})
 			if e != nil || len(rows) != want+1 {
 				t.Fatalf("resume: %d %v", len(rows), e)
 			}
 			if e = p.syncMailbox(c); e != nil {
 				t.Fatal(e)
 			}
-			rows, _ = s.Transactions(Filter{})
+			rows, _ = s.Transactions(store.Filter{})
 			if len(rows) != want+1 {
 				t.Fatal("duplicated messages")
 			}
@@ -131,10 +130,20 @@ func TestIMAPLabelCursorBackfillAndPeek(t *testing.T) {
 			if e = p.syncMailbox(c); e != nil {
 				t.Fatal(e)
 			}
-			rows, _ = s.Transactions(Filter{})
+			rows, _ = s.Transactions(store.Filter{})
 			if len(rows) != 2 {
 				t.Fatalf("UID reset should recover both messages once, got %d", len(rows))
 			}
 		})
 	}
+}
+
+func testStore(t *testing.T) *store.Store {
+	t.Helper()
+	s, e := store.Open(t.TempDir())
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() { s.Close() })
+	return s
 }
