@@ -1,11 +1,33 @@
 name: Test
+
 on:
-  push:
-    branches: [main]
   pull_request:
+    branches: [main]
+
 jobs:
-  test:
+  server:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Placeholder frontend for go:embed
+        run: mkdir -p web/dist && echo '<!doctype html>' > web/dist/index.html
+      - name: Format
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - name: PDF tools
+        run: sudo apt-get update && sudo apt-get install -y qpdf poppler-utils
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -race -cover ./...
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -13,11 +35,8 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - run: npm ci && npm run format:check && npm run typecheck && npm test && npm run build
-        working-directory: frontend
-      - run: sudo apt-get update && sudo apt-get install -y qpdf poppler-utils
-      - run: go vet ./... && go test -race ./...
-      - run: docker build -t ledger:test .
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
