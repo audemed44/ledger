@@ -37,7 +37,7 @@ func TestStatementRowsBalanceAndCredits(t *testing.T) {
 func TestStatementRoundingIsFlagged(t *testing.T) {
 	text := strings.Replace(syntheticStatement, "C550.00", "C550.15", 1)
 	text = strings.Replace(text, "C 50.00", "C 50.15", 1)
-	s, e := ParseHDFCStatement(text)
+	s, e := ParseHDFCStatementWithTolerance(text, 0)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -52,5 +52,24 @@ func TestStatementFailsClosed(t *testing.T) {
 				t.Fatal("accepted invalid statement")
 			}
 		})
+	}
+}
+
+func TestRoundingToleranceBoundary(t *testing.T) {
+	for _, c := range []struct {
+		closing    string
+		accepted   bool
+		difference int64
+	}{{"950.00", true, 0}, {"949.85", true, 15}, {"949.01", true, 99}, {"950.99", true, -99}, {"949.00", false, 100}, {"951.00", false, -100}} {
+		text := strings.Replace(syntheticStatement, "= C950.00", "= C"+c.closing, 1)
+		s, e := ParseHDFCStatement(text)
+		if e != nil || s.Balanced != c.accepted || s.Discrepancy != c.difference || s.RoundingAccepted != (c.accepted && c.difference != 0) {
+			t.Fatalf("%s: %+v %v", c.closing, s, e)
+		}
+	}
+	// Tolerance never hides an omitted transaction or summary mismatch.
+	text := strings.Replace(syntheticStatement, "C 50.00", "C 49.85", 1)
+	if _, e := ParseHDFCStatement(text); e == nil {
+		t.Fatal("accepted a row-total discrepancy as rounding")
 	}
 }

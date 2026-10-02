@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 	_ "time/tzdata"
@@ -81,7 +82,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	app := &ledger.Server{Store: store, Poller: poller, Token: token, SecureCookies: env("LEDGER_SECURE_COOKIES", "true") == "true", Demo: *demo, Files: assets}
+	app := &ledger.Server{Store: store, Poller: poller, Token: token, SecureCookies: env("LEDGER_SECURE_COOKIES", "true") == "true", Demo: *demo, Files: assets, PDFPasswords: strings.Split(os.Getenv("LEDGER_PDF_PASSWORDS"), "|")}
 	server := &http.Server{Addr: env("LEDGER_LISTEN", ":8080"), Handler: app.Handler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 11 * time.Minute, IdleTimeout: 60 * time.Second}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
