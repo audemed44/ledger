@@ -1,15 +1,8 @@
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/preact";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/preact";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { MessageReview } from "./MessageReview";
-import { App } from "./main";
-import type { Message } from "./api";
+import { MessageReview } from "./components/MessageReview";
+import { App } from "./App";
+import type { Message } from "./types";
 const message: Message = {
   id: 1,
   sender: "alerts@example.invalid",
@@ -77,13 +70,9 @@ it("opens readable email text before parser settings, including HTML-only mail",
   expect((text as HTMLTextAreaElement).value).toBe(message.body);
   expect(screen.queryByLabelText("Body pattern")).toBeNull();
   expect(screen.getByText(/Text extracted from HTML/)).toBeTruthy();
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Create alert parser" }),
-  );
+  fireEvent.click(await screen.findByRole("button", { name: "Create alert parser" }));
   await screen.findByText("Teach your ledger.");
-  expect(
-    (screen.getByLabelText("Email text") as HTMLTextAreaElement).value,
-  ).toBe(message.body);
+  expect((screen.getByLabelText("Email text") as HTMLTextAreaElement).value).toBe(message.body);
 });
 it("renders hostile text inertly and shows an honest missing-content error", () => {
   render(
@@ -99,12 +88,8 @@ it("renders hostile text inertly and shows an honest missing-content error", () 
     />,
   );
   expect(document.querySelector("img")).toBeNull();
-  expect(screen.getByRole("alert").textContent).toContain(
-    "Archive could not be read",
-  );
-  expect(
-    screen.queryByRole("button", { name: "Create alert parser" }),
-  ).toBeNull();
+  expect(screen.getByRole("alert").textContent).toContain("Archive could not be read");
+  expect(screen.queryByRole("button", { name: "Create alert parser" })).toBeNull();
 });
 it("configures a named PDF parser using password slots, then shows account and text", async () => {
   const parser = {
@@ -164,9 +149,7 @@ it("configures a named PDF parser using password slots, then shows account and t
         ...message,
         has_pdf: true,
         can_parse: false,
-        attachments: [
-          { part: 1, name: "statement.pdf", content_type: "application/pdf" },
-        ],
+        attachments: [{ part: 1, name: "statement.pdf", content_type: "application/pdf" }],
       }}
       close={() => {}}
       createParser={() => {}}
@@ -185,22 +168,16 @@ it("configures a named PDF parser using password slots, then shows account and t
   fireEvent.change(screen.getByLabelText(/PDF password/), {
     target: { value: "2" },
   });
-  fireEvent.click(
-    screen.getByRole("button", { name: "Save parser configuration" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Save parser configuration" }));
   await screen.findByRole("button", { name: "Extract & validate PDF" });
-  fireEvent.click(
-    screen.getByRole("button", { name: "Extract & validate PDF" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: "Extract & validate PDF" }));
   const text = await screen.findByLabelText("Extracted PDF text");
   expect((text as HTMLTextAreaElement).value).toBe("SYNTHETIC PDF TEXT");
   expect(screen.getByText("HDFC · Credit card •• 4242")).toBeTruthy();
   expect(saved.name).toBe("HDFC Credit Card Parser v1");
   expect(saved.password_slot).toBe(2);
   expect(saved.password).toBeUndefined();
-  expect(
-    screen.queryByRole("button", { name: "Create alert parser" }),
-  ).toBeNull();
+  expect(screen.queryByRole("button", { name: "Create alert parser" })).toBeNull();
 });
 
 it("imports only after an explicit action and refreshes the ledger", async () => {
@@ -241,8 +218,7 @@ it("imports only after an explicit action and refreshes the ledger", async () =>
   };
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
     if (url === "/api/statement-parsers") return reply([preset]);
-    if (url === "/api/pdf-config")
-      return reply({ password_slots: [], adapters: [] });
+    if (url === "/api/pdf-config") return reply({ password_slots: [], adapters: [] });
     if (url === "/api/messages/1/pdf") {
       const body = JSON.parse(options?.body as string);
       if (body.import) {
@@ -264,9 +240,7 @@ it("imports only after an explicit action and refreshes the ledger", async () =>
           ...message,
           has_pdf: true,
           can_parse: false,
-          attachments: [
-            { part: 0, name: "statement.pdf", content_type: "application/pdf" },
-          ],
+          attachments: [{ part: 0, name: "statement.pdf", content_type: "application/pdf" }],
         }}
         close={() => {}}
         createParser={() => {}}
@@ -274,9 +248,7 @@ it("imports only after an explicit action and refreshes the ledger", async () =>
       />,
     );
   });
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Extract & validate PDF" }),
-  );
+  fireEvent.click(await screen.findByRole("button", { name: "Extract & validate PDF" }));
   const button = await screen.findByRole("button", {
     name: "Import 1 transactions",
   });
@@ -286,19 +258,14 @@ it("imports only after an explicit action and refreshes the ledger", async () =>
   await screen.findByText(/Imported: 1 transactions/);
   expect(importRequests).toBe(1);
   expect(imported).toHaveBeenCalledTimes(1);
-  expect(
-    screen.queryByRole("button", { name: "Import 1 transactions" }),
-  ).toBeNull();
+  expect(screen.queryByRole("button", { name: "Import 1 transactions" })).toBeNull();
 });
 
 it("keeps partial PDF rows visible and offers no import on validation failure", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
     if (url === "/api/statement-parsers")
-      return reply([
-        { id: 1, name: "HDFC Credit Card Parser v1", password_slot: 0 },
-      ]);
-    if (url === "/api/pdf-config")
-      return reply({ password_slots: [], adapters: [] });
+      return reply([{ id: 1, name: "HDFC Credit Card Parser v1", password_slot: 0 }]);
+    if (url === "/api/pdf-config") return reply({ password_slots: [], adapters: [] });
     return reply({
       text: "DIAGNOSTIC TEXT",
       password_slot: 0,
@@ -325,26 +292,20 @@ it("keeps partial PDF rows visible and offers no import on validation failure", 
           ...message,
           has_pdf: true,
           can_parse: false,
-          attachments: [
-            { part: 0, name: "statement.pdf", content_type: "application/pdf" },
-          ],
+          attachments: [{ part: 0, name: "statement.pdf", content_type: "application/pdf" }],
         }}
         close={() => {}}
         createParser={() => {}}
       />,
     );
   });
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Extract & validate PDF" }),
-  );
+  fireEvent.click(await screen.findByRole("button", { name: "Extract & validate PDF" }));
   await screen.findByText("READABLE ROW");
-  expect(screen.getByRole("alert").textContent).toContain(
-    "unparsed transaction on line 12",
-  );
+  expect(screen.getByRole("alert").textContent).toContain("unparsed transaction on line 12");
   expect(screen.queryByRole("button", { name: /^Import / })).toBeNull();
-  expect(
-    (screen.getByLabelText("Extracted PDF text") as HTMLTextAreaElement).value,
-  ).toBe("DIAGNOSTIC TEXT");
+  expect((screen.getByLabelText("Extracted PDF text") as HTMLTextAreaElement).value).toBe(
+    "DIAGNOSTIC TEXT",
+  );
 });
 
 it("reuses and deletes an existing PDF parser without creating another", async () => {
@@ -355,19 +316,17 @@ it("reuses and deletes an existing PDF parser without creating another", async (
     password_slot: 0,
     balance_tolerance_paise: 99,
   };
-  const fetcher = vi
-    .spyOn(globalThis, "fetch")
-    .mockImplementation(async (url, options) => {
-      if (url === "/api/statement-parsers/7" && options?.method === "DELETE")
-        return reply({ ok: true });
-      if (url === "/api/statement-parsers") return reply([preset]);
-      if (url === "/api/pdf-config")
-        return reply({
-          password_slots: [],
-          adapters: [{ id: "hdfc-credit-card", name: preset.name }],
-        });
-      throw Error(`Unexpected URL: ${url}`);
-    });
+  const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
+    if (url === "/api/statement-parsers/7" && options?.method === "DELETE")
+      return reply({ ok: true });
+    if (url === "/api/statement-parsers") return reply([preset]);
+    if (url === "/api/pdf-config")
+      return reply({
+        password_slots: [],
+        adapters: [{ id: "hdfc-credit-card", name: preset.name }],
+      });
+    throw Error(`Unexpected URL: ${url}`);
+  });
   vi.spyOn(window, "confirm").mockReturnValue(true);
   await act(async () => {
     render(
@@ -376,9 +335,7 @@ it("reuses and deletes an existing PDF parser without creating another", async (
           ...message,
           has_pdf: true,
           can_parse: false,
-          attachments: [
-            { part: 0, name: "statement.pdf", content_type: "application/pdf" },
-          ],
+          attachments: [{ part: 0, name: "statement.pdf", content_type: "application/pdf" }],
         }}
         close={() => {}}
         createParser={() => {}}
@@ -386,48 +343,33 @@ it("reuses and deletes an existing PDF parser without creating another", async (
     );
   });
   await waitFor(() =>
-    expect(
-      (screen.getByLabelText("PDF parser") as HTMLSelectElement).value,
-    ).toBe("7"),
+    expect((screen.getByLabelText("PDF parser") as HTMLSelectElement).value).toBe("7"),
   );
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Edit selected parser" }),
-  );
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Delete PDF parser" }),
-  );
+  fireEvent.click(await screen.findByRole("button", { name: "Edit selected parser" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Delete PDF parser" }));
   await screen.findByRole("button", { name: "Extract PDF text" });
-  expect(
-    fetcher.mock.calls.filter(([, o]) => o?.method === "POST"),
-  ).toHaveLength(0);
-  expect(
-    screen.queryByRole("option", { name: /HDFC Credit Card Parser v1/ }),
-  ).toBeNull();
+  expect(fetcher.mock.calls.filter(([, o]) => o?.method === "POST")).toHaveLength(0);
+  expect(screen.queryByRole("option", { name: /HDFC Credit Card Parser v1/ })).toBeNull();
 });
 
 it("requests inbox filters from the server", async () => {
   location.hash = "#inbox";
-  const fetcher = vi
-    .spyOn(globalThis, "fetch")
-    .mockImplementation(async (url) => {
-      if (url === "/api/summary")
-        return reply({
-          totals: [],
-          accounts: [],
-          transactions: 0,
-          queued: 1,
-          parsers: 1,
-          month: "2026-10",
-          demo: false,
-        });
-      if (url === "/api/sync")
-        return reply({ configured: true, running: false, label: "Bank" });
-      if (url === "/api/messages?kind=pdf")
-        return reply([{ ...message, subject: "PDF statement" }]);
-      if (url === "/api/messages?kind=text")
-        return reply([{ ...message, subject: "Text alert" }]);
-      return reply([]);
-    });
+  const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    if (url === "/api/summary")
+      return reply({
+        totals: [],
+        accounts: [],
+        transactions: 0,
+        queued: 1,
+        parsers: 1,
+        month: "2026-10",
+        demo: false,
+      });
+    if (url === "/api/sync") return reply({ configured: true, running: false, label: "Bank" });
+    if (url === "/api/messages?kind=pdf") return reply([{ ...message, subject: "PDF statement" }]);
+    if (url === "/api/messages?kind=text") return reply([{ ...message, subject: "Text alert" }]);
+    return reply([]);
+  });
   await act(async () => {
     render(<App />);
   });
@@ -439,8 +381,6 @@ it("requests inbox filters from the server", async () => {
     target: { value: "text" },
   });
   await screen.findByText("Text alert");
-  expect(
-    fetcher.mock.calls.some(([url]) => url === "/api/messages?kind=pdf"),
-  ).toBe(true);
+  expect(fetcher.mock.calls.some(([url]) => url === "/api/messages?kind=pdf")).toBe(true);
   expect(screen.queryByText("PDF statement")).toBeNull();
 });

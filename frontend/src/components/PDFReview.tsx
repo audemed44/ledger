@@ -1,48 +1,12 @@
 import { useEffect, useState } from "preact/hooks";
-import { api, money, dateLabel } from "./api";
-import type { Message, Transaction } from "./api";
-import {
-  StatementParserForm,
-  newStatementParser,
-  passwordLabel,
-} from "./StatementParsers";
-import type { StatementParser, PDFConfig } from "./StatementParsers";
+import { api } from "../api";
+import { dateLabel, money, newStatementParser, passwordLabel } from "../lib";
+import type { Message, PDFConfig, PDFResult, StatementParser } from "../types";
+import { StatementParserForm } from "./StatementParsers";
 
-type PDFResult = {
-  fingerprint?: string;
-  imported?: { statement_id: number; count: number; already_imported: boolean };
-  text: string;
-  password_slot: number;
-  parser_name?: string;
-  parse_error?: string;
-  statement?: {
-    transactions: Transaction[];
-    issuer: string;
-    account: string;
-    account_kind: string;
-    date: string;
-    due_date: string;
-    minimum_due: number;
-    opening: number;
-    total_due: number;
-    balanced: boolean;
-    rounding_accepted?: boolean;
-    balance_tolerance_paise?: number;
-    discrepancy: number;
-    warnings: string[];
-  };
-};
-export function PDFReview({
-  message,
-  imported,
-}: {
-  message: Message;
-  imported?: () => void;
-}) {
+export function PDFReview({ message, imported }: { message: Message; imported?: () => void }) {
   const attachments = (message.attachments || []).filter(
-    (a) =>
-      a.content_type === "application/pdf" ||
-      a.name.toLowerCase().endsWith(".pdf"),
+    (a) => a.content_type === "application/pdf" || a.name.toLowerCase().endsWith(".pdf"),
   );
   const [part, setPart] = useState(attachments[0]?.part ?? -1),
     [parserID, setParserID] = useState(0),
@@ -54,10 +18,7 @@ export function PDFReview({
     [busy, setBusy] = useState(false);
   useEffect(() => {
     let live = true;
-    Promise.all([
-      api<StatementParser[]>("statement-parsers"),
-      api<PDFConfig>("pdf-config"),
-    ])
+    Promise.all([api<StatementParser[]>("statement-parsers"), api<PDFConfig>("pdf-config")])
       .then(([p, c]) => {
         if (live) {
           setParsers(p);
@@ -76,8 +37,8 @@ export function PDFReview({
     <section class="pdf-review" aria-label="PDF statement review">
       <h3>Review and import the PDF</h3>
       <p class="hint">
-        Choose a saved parser for this statement. Create a configuration only
-        when you need different settings.
+        Choose a saved parser for this statement. Create a configuration only when you need
+        different settings.
       </p>
       <div class="two-col">
         <label class="field">
@@ -118,8 +79,8 @@ export function PDFReview({
       </div>
       {config && !config.password_slots.length && (
         <p class="hint">
-          For encrypted statements, set LEDGER_PDF_PASSWORDS in Hoist, with
-          passwords separated by |, then redeploy.
+          For encrypted statements, set LEDGER_PDF_PASSWORDS in Hoist, with passwords separated by
+          |, then redeploy.
         </p>
       )}
       {editing && config ? (
@@ -164,19 +125,13 @@ export function PDFReview({
               }
             }}
           >
-            {busy
-              ? "Opening PDF…"
-              : parserID
-                ? "Extract & validate PDF"
-                : "Extract PDF text"}
+            {busy ? "Opening PDF…" : parserID ? "Extract & validate PDF" : "Extract PDF text"}
           </button>
           {parserID > 0 && (
             <button
               class="btn"
               disabled={busy || !config}
-              onClick={() =>
-                setEditing(parsers.find((p) => p.id === parserID) || null)
-              }
+              onClick={() => setEditing(parsers.find((p) => p.id === parserID) || null)}
             >
               Edit selected parser
             </button>
@@ -205,17 +160,13 @@ export function PDFReview({
           </p>
           {result.parse_error && (
             <div class="notice error" role="alert">
-              {result.parse_error}. Any rows shown below are incomplete or
-              unvalidated; nothing imported. The extracted text is available for
-              diagnosis.
+              {result.parse_error}. Any rows shown below are incomplete or unvalidated; nothing
+              imported. The extracted text is available for diagnosis.
             </div>
           )}
           {result.statement && (
             <>
-              <div
-                class={"notice " + (result.statement.balanced ? "" : "error")}
-                role="status"
-              >
+              <div class={"notice " + (result.statement.balanced ? "" : "error")} role="status">
                 {result.statement.transactions.length} transactions read.{" "}
                 {result.parse_error
                   ? "Validation failed; partial results only."
@@ -239,15 +190,12 @@ export function PDFReview({
                       setBusy(true);
                       setError("");
                       try {
-                        const response = await api<PDFResult>(
-                          `messages/${message.id}/pdf`,
-                          {
-                            part,
-                            parser_id: parserID,
-                            import: true,
-                            fingerprint: result.fingerprint,
-                          },
-                        );
+                        const response = await api<PDFResult>(`messages/${message.id}/pdf`, {
+                          part,
+                          parser_id: parserID,
+                          import: true,
+                          fingerprint: result.fingerprint,
+                        });
                         setResult(response);
                         imported?.();
                       } catch (e) {
@@ -269,10 +217,8 @@ export function PDFReview({
                     <div>
                       <span class="eyebrow">Statement account</span>
                       {result.statement.issuer} ·{" "}
-                      {result.statement.account_kind === "bank"
-                        ? "Bank account"
-                        : "Credit card"}{" "}
-                      •• {result.statement.account}
+                      {result.statement.account_kind === "bank" ? "Bank account" : "Credit card"} ••{" "}
+                      {result.statement.account}
                     </div>
                     <div>
                       <span class="eyebrow">Statement date</span>
@@ -298,10 +244,7 @@ export function PDFReview({
                 </p>
               ))}
               <details class="statement-rows" open>
-                <summary>
-                  Extracted transactions ({result.statement.transactions.length}
-                  )
-                </summary>
+                <summary>Extracted transactions ({result.statement.transactions.length})</summary>
                 {result.statement.transactions.map((t, i) => (
                   <div class="statement-row" key={i}>
                     <span>
@@ -328,8 +271,8 @@ export function PDFReview({
           </label>
           {!result.text.trim() && (
             <p class="hint">
-              This PDF contains no extractable text. Scanned statements require
-              OCR, which is not supported yet.
+              This PDF contains no extractable text. Scanned statements require OCR, which is not
+              supported yet.
             </p>
           )}
         </div>
