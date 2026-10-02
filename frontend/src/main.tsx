@@ -409,6 +409,7 @@ export function App() {
       {reviewing && (
         <MessageReview
           message={reviewing}
+          imported={refresh}
           close={() => setReviewing(null)}
           createParser={() => {
             setEditing({
@@ -649,15 +650,26 @@ function Queue({
   refresh: () => void;
   edit: (m: Message) => void;
 }) {
+  const [kind, setKind] = useState("all");
   const [rows, setRows] = useState<Message[] | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
   useEffect(() => {
-    api<Message[]>("messages")
-      .then(setRows)
-      .catch((e) => setError(e.message));
-  }, [version]);
+    let live = true;
+    setRows(null);
+    setError("");
+    api<Message[]>(kind === "all" ? "messages" : `messages?kind=${kind}`)
+      .then((rows) => {
+        if (live) setRows(rows);
+      })
+      .catch((e) => {
+        if (live) setError(e.message);
+      });
+    return () => {
+      live = false;
+    };
+  }, [version, kind]);
   return (
     <section>
       <Section index="01" title="Needs review">
@@ -681,6 +693,18 @@ function Queue({
           <RefreshCw size={14} class={busy ? "spin" : ""} /> Retry backlog
         </button>
       </Section>
+      <label class="field">
+        <span class="eyebrow">Inbox filter</span>
+        <select value={kind} onChange={(e) => setKind(e.currentTarget.value)}>
+          <option value="all">All emails</option>
+          <option value="pdf">PDF statements</option>
+          <option value="text">Text/HTML alerts</option>
+        </select>
+      </label>
+      <p class="hint">
+        Newest email date first. Emails with PDFs appear under PDF statements
+        even when they also contain covering text.
+      </p>
       {parserCount === 0 && (
         <div class="notice">
           Mail is arriving, but no alert parsers have been configured yet. Open
@@ -727,8 +751,8 @@ function Queue({
             </article>
           ))}
           <p class="hint">
-            Showing up to 200 queued messages. Retry backlog processes all
-            queued mail.
+            Showing up to 200 matching queued messages, newest first. Retry
+            backlog processes all queued mail.
           </p>
         </div>
       ) : (
@@ -1225,6 +1249,32 @@ function Editor({
             stay unchanged.
           </span>
         </div>
+        {parser.id > 0 && (
+          <button
+            class="btn"
+            disabled={busy}
+            onClick={async () => {
+              if (
+                !window.confirm(
+                  `Delete parser “${parser.name}”? Imported transactions and emails will be kept.`,
+                )
+              )
+                return;
+              setBusy(true);
+              setError("");
+              try {
+                await api(`parsers/${parser.id}`, undefined, "DELETE");
+                saved();
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Delete alert parser
+          </button>
+        )}
         <button class="btn primary" disabled={busy} onClick={save}>
           {busy ? "Saving…" : "Save & retry backlog"}
           <ArrowRight size={15} />

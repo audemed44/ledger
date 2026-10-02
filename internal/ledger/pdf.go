@@ -64,6 +64,22 @@ func (s *Store) SaveStatementParser(p StatementParser) (StatementParser, error) 
 	if err := p.Validate(); err != nil {
 		return p, err
 	}
+	p.Name = strings.TrimSpace(p.Name)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	existing, err := s.StatementParsers()
+	if err != nil {
+		return p, err
+	}
+	for _, saved := range existing {
+		if saved.ID == p.ID || !strings.EqualFold(saved.Name, p.Name) {
+			continue
+		}
+		if p.ID == 0 && saved.Adapter == p.Adapter && saved.PasswordSlot == p.PasswordSlot && saved.BalanceTolerancePaise == p.BalanceTolerancePaise {
+			return saved, nil
+		}
+		return p, errParserNameTaken
+	}
 	raw, err := json.Marshal(p)
 	if err != nil {
 		return p, err
@@ -90,12 +106,56 @@ func (s *Store) SaveStatementParser(p StatementParser) (StatementParser, error) 
 	return p, err
 }
 
+var errParserNameTaken = errors.New("A PDF parser with this name already exists; select or edit it, or choose a different name")
+
+func isPDF(kind, name string) bool {
+	return kind == "application/pdf" || strings.HasSuffix(strings.ToLower(name), ".pdf")
+}
+
+// Old versions allowed identical presets to be created repeatedly. Keep the
+// oldest of exact duplicates only; distinct configurations remain untouched.
+func (s *Store) mergeDuplicateStatementParsers() error {
+	parsers, err := s.StatementParsers()
+	if err != nil {
+		return err
+	}
+	seen := map[string]bool{}
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, p := range parsers {
+		if strings.EqualFold(strings.TrimSpace(p.Name), "HDFC Credit Card") {
+			p.Name = "HDFC Credit Card Parser v1"
+			raw, _ := json.Marshal(p)
+			if _, err = tx.Exec("UPDATE statement_parsers SET definition=? WHERE id=?", string(raw), p.ID); err != nil {
+				return err
+			}
+		}
+		id := p.ID
+		p.ID = 0
+		p.Name = strings.ToLower(strings.TrimSpace(p.Name))
+		raw, _ := json.Marshal(p)
+		if seen[string(raw)] {
+			if _, err = tx.Exec("DELETE FROM statement_parsers WHERE id=?", id); err != nil {
+				return err
+			}
+		} else {
+			seen[string(raw)] = true
+		}
+	}
+	return tx.Commit()
+}
+
 type PDFPreview struct {
-	Text         string     `json:"text"`
-	PasswordSlot int        `json:"password_slot"`
-	ParserName   string     `json:"parser_name,omitempty"`
-	Statement    *Statement `json:"statement,omitempty"`
-	ParseError   string     `json:"parse_error,omitempty"`
+	Fingerprint  string           `json:"fingerprint,omitempty"`
+	Imported     *StatementImport `json:"imported,omitempty"`
+	Text         string           `json:"text"`
+	PasswordSlot int              `json:"password_slot"`
+	ParserName   string           `json:"parser_name,omitempty"`
+	Statement    *Statement       `json:"statement,omitempty"`
+	ParseError   string           `json:"parse_error,omitempty"`
 }
 
 func (s *Store) previewPDF(ctx context.Context, id int64, part int, p *StatementParser, passwords []string) (PDFPreview, error) {
@@ -131,7 +191,7 @@ func (s *Store) previewPDF(ctx context.Context, id int64, part int, p *Statement
 		case *mail.InlineHeader:
 			kind, _, _ = h.ContentType()
 		}
-		if kind != "application/pdf" && !strings.HasSuffix(strings.ToLower(name), ".pdf") {
+		if !isPDF(kind, name) {
 			return out, errors.New("Selected attachment is not a PDF")
 		}
 		f, e := os.CreateTemp("", "ledger-attachment-*.pdf")
@@ -155,10 +215,12 @@ func (s *Store) previewPDF(ctx context.Context, id int64, part int, p *Statement
 		if p != nil {
 			out.ParserName = p.Name
 			statement, e := ParseHDFCStatementWithTolerance(out.Text, p.BalanceTolerancePaise)
+			out.Statement = &statement
 			if e != nil {
 				out.ParseError = e.Error()
-			} else {
-				out.Statement = &statement
+			}
+			if e == nil && statement.Balanced {
+				out.Fingerprint = statementFingerprint(statement)
 			}
 		}
 		return out, nil
@@ -173,7 +235,7 @@ func (s *Server) pdfRoutes(mux *http.ServeMux) {
 				slots = append(slots, i+1)
 			}
 		}
-		jsonResponse(w, map[string]any{"password_slots": slots, "adapters": []map[string]string{{"id": "hdfc-credit-card", "name": "HDFC Credit Card", "description": "HDFC Tata Neu statement layout"}}})
+		jsonResponse(w, map[string]any{"password_slots": slots, "adapters": []map[string]string{{"id": "hdfc-credit-card", "name": "HDFC Credit Card Parser v1", "description": "HDFC credit card summary and dated transaction table"}}})
 	})
 	mux.HandleFunc("GET /api/statement-parsers", func(w http.ResponseWriter, r *http.Request) {
 		p, err := s.Store.StatementParsers()
@@ -197,18 +259,48 @@ func (s *Server) pdfRoutes(mux *http.ServeMux) {
 			return
 		}
 		saved, err := s.Store.SaveStatementParser(p)
+		if errors.Is(err, errParserNameTaken) {
+			failure(w, 409, err.Error())
+			return
+		}
 		if err != nil {
 			failure(w, 500, "Could not save statement parser")
 			return
 		}
 		jsonResponse(w, saved)
 	})
+	mux.HandleFunc("DELETE /api/statement-parsers/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil || id <= 0 {
+			failure(w, 400, "Invalid parser")
+			return
+		}
+		s.Store.mu.Lock()
+		defer s.Store.mu.Unlock()
+		result, err := s.Store.DB.Exec("DELETE FROM statement_parsers WHERE id=?", id)
+		if err != nil {
+			failure(w, 500, "Could not delete statement parser")
+			return
+		}
+		count, err := result.RowsAffected()
+		if err != nil {
+			failure(w, 500, "Could not delete statement parser")
+			return
+		}
+		if count == 0 {
+			failure(w, 404, "Statement parser not found")
+			return
+		}
+		jsonResponse(w, map[string]bool{"ok": true})
+	})
 	// PDF work is on demand, with one extraction at a time to bound memory/CPU.
 	slots := make(chan struct{}, 1)
 	mux.HandleFunc("POST /api/messages/{id}/pdf", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			Part     int   `json:"part"`
-			ParserID int64 `json:"parser_id"`
+			Part        int    `json:"part"`
+			ParserID    int64  `json:"parser_id"`
+			Import      bool   `json:"import"`
+			Fingerprint string `json:"fingerprint"`
 		}
 		if !decode(w, r, &body) {
 			return
@@ -243,6 +335,14 @@ func (s *Server) pdfRoutes(mux *http.ServeMux) {
 		if err != nil {
 			failure(w, 422, err.Error())
 			return
+		}
+		if body.Import {
+			imported, err := s.Store.importStatement(id, body.Part, result, body.Fingerprint)
+			if err != nil {
+				failure(w, 409, err.Error())
+				return
+			}
+			result.Imported = &imported
 		}
 		jsonResponse(w, result)
 	})

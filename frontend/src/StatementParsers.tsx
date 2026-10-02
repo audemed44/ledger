@@ -15,7 +15,7 @@ export type PDFConfig = {
 export const newStatementParser: StatementParser = {
   balance_tolerance_paise: 99,
   id: 0,
-  name: "HDFC Credit Card",
+  name: "HDFC Credit Card Parser v1",
   adapter: "hdfc-credit-card",
   password_slot: 0,
 };
@@ -27,11 +27,13 @@ export function StatementParserForm({
   config,
   saved,
   cancel,
+  deleted,
 }: {
   initial: StatementParser;
   config: PDFConfig;
   saved: (p: StatementParser) => void;
   cancel: () => void;
+  deleted?: () => void;
 }) {
   const [parser, setParser] = useState(initial),
     [busy, setBusy] = useState(false),
@@ -78,8 +80,9 @@ export function StatementParserForm({
           ))}
         </select>
         <span class="hint">
-          Each layout needs a dedicated adapter. Only the HDFC Tata Neu layout
-          is supported currently.
+          Checks HDFC credit card summaries and dated transaction tables. Card
+          branding does not select the format; unsupported structures are
+          flagged.
         </span>
       </label>
       <label class="field">
@@ -138,10 +141,45 @@ export function StatementParserForm({
           {error}
         </p>
       )}
+      <p class="hint">
+        A parser is reusable across statements. Saving this configuration does
+        not import transactions.
+      </p>
       <div class="actions">
         <button class="btn primary" disabled={busy}>
-          Save PDF parser
+          Save parser configuration
         </button>
+        {parser.id > 0 && deleted && (
+          <button
+            type="button"
+            class="btn"
+            disabled={busy}
+            onClick={async () => {
+              if (
+                !window.confirm(
+                  `Delete parser “${parser.name}”? Imported transactions and emails will be kept.`,
+                )
+              )
+                return;
+              setBusy(true);
+              setError("");
+              try {
+                await api(
+                  `statement-parsers/${parser.id}`,
+                  undefined,
+                  "DELETE",
+                );
+                deleted();
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Delete PDF parser
+          </button>
+        )}
         <button type="button" class="btn" disabled={busy} onClick={cancel}>
           Cancel
         </button>
@@ -181,8 +219,8 @@ export function StatementParsers() {
       </div>
       <p class="hint">
         Named, issuer-specific layouts. Review a PDF in the Inbox to extract its
-        text and check its transactions. Statement previews do not import
-        transactions.
+        text and check its transactions, then explicitly import a validated
+        statement. Reuse an existing parser for the next email.
       </p>
       {error && (
         <p class="notice error" role="alert">
@@ -195,6 +233,10 @@ export function StatementParsers() {
           initial={editing}
           config={config}
           cancel={() => setEditing(null)}
+          deleted={() => {
+            setParsers((list) => list.filter((p) => p.id !== editing.id));
+            setEditing(null);
+          }}
           saved={(p) => {
             setParsers((list) => [...list.filter((v) => v.id !== p.id), p]);
             setEditing(null);

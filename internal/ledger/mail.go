@@ -73,7 +73,7 @@ func (s *Store) Ingest(raw []byte) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	_, err = s.DB.Exec("INSERT OR IGNORE INTO messages(message_key,sender,subject,date,body,reason,archive) VALUES(?,?,?,?,?,?,?)", m.Key, m.Sender, m.Subject, m.Date, m.Body, m.Reason, m.Archive)
+	_, err = s.DB.Exec("INSERT OR IGNORE INTO messages(message_key,sender,subject,date,body,reason,archive,has_pdf) VALUES(?,?,?,?,?,?,?,?)", m.Key, m.Sender, m.Subject, m.Date, m.Body, m.Reason, m.Archive, m.HasPDF)
 	if err != nil {
 		return 0, err
 	}

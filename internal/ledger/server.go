@@ -94,7 +94,12 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /api/transactions.csv", s.csv)
 	mux.HandleFunc("GET /api/messages", func(w http.ResponseWriter, r *http.Request) {
-		rows, err := s.Store.Messages()
+		kind := r.URL.Query().Get("kind")
+		if kind != "" && kind != "all" && kind != "pdf" && kind != "text" {
+			failure(w, 400, "Invalid inbox filter")
+			return
+		}
+		rows, err := s.Store.FilteredMessages(kind)
 		if err != nil {
 			failure(w, 500, "Could not load queue")
 			return
@@ -137,6 +142,30 @@ func (s *Server) Handler() http.Handler {
 			return
 		}
 		jsonResponse(w, saved)
+	})
+	mux.HandleFunc("DELETE /api/parsers/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+		if err != nil || id <= 0 {
+			failure(w, 400, "Invalid parser")
+			return
+		}
+		s.Store.mu.Lock()
+		defer s.Store.mu.Unlock()
+		result, err := s.Store.DB.Exec("DELETE FROM parsers WHERE id=?", id)
+		if err != nil {
+			failure(w, 500, "Could not delete parser")
+			return
+		}
+		count, err := result.RowsAffected()
+		if err != nil {
+			failure(w, 500, "Could not delete parser")
+			return
+		}
+		if count == 0 {
+			failure(w, 404, "Parser not found")
+			return
+		}
+		jsonResponse(w, map[string]bool{"ok": true})
 	})
 	mux.HandleFunc("POST /api/parsers/preview", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {

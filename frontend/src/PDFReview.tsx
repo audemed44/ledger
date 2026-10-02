@@ -9,6 +9,8 @@ import {
 import type { StatementParser, PDFConfig } from "./StatementParsers";
 
 type PDFResult = {
+  fingerprint?: string;
+  imported?: { statement_id: number; count: number; already_imported: boolean };
   text: string;
   password_slot: number;
   parser_name?: string;
@@ -30,7 +32,13 @@ type PDFResult = {
     warnings: string[];
   };
 };
-export function PDFReview({ message }: { message: Message }) {
+export function PDFReview({
+  message,
+  imported,
+}: {
+  message: Message;
+  imported?: () => void;
+}) {
   const attachments = (message.attachments || []).filter(
     (a) =>
       a.content_type === "application/pdf" ||
@@ -40,7 +48,7 @@ export function PDFReview({ message }: { message: Message }) {
     [parserID, setParserID] = useState(0),
     [parsers, setParsers] = useState<StatementParser[]>([]),
     [config, setConfig] = useState<PDFConfig | null>(null),
-    [creating, setCreating] = useState(false),
+    [editing, setEditing] = useState<StatementParser | null>(null),
     [result, setResult] = useState<PDFResult | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
@@ -66,7 +74,11 @@ export function PDFReview({ message }: { message: Message }) {
   }, []);
   return (
     <section class="pdf-review" aria-label="PDF statement review">
-      <h3>Read the PDF</h3>
+      <h3>Review and import the PDF</h3>
+      <p class="hint">
+        Choose a saved parser for this statement. Create a configuration only
+        when you need different settings.
+      </p>
       <div class="two-col">
         <label class="field">
           <span class="eyebrow">PDF attachment</span>
@@ -110,16 +122,23 @@ export function PDFReview({ message }: { message: Message }) {
           passwords separated by |, then redeploy.
         </p>
       )}
-      {creating && config ? (
+      {editing && config ? (
         <StatementParserForm
-          initial={{ ...newStatementParser }}
+          key={editing.id}
+          initial={editing}
           config={config}
-          cancel={() => setCreating(false)}
+          cancel={() => setEditing(null)}
+          deleted={() => {
+            setParsers((list) => list.filter((p) => p.id !== editing.id));
+            setParserID(0);
+            setResult(null);
+            setEditing(null);
+          }}
           saved={(p) => {
-            setParsers((list) => [...list, p]);
+            setParsers((list) => [...list.filter((v) => v.id !== p.id), p]);
             setParserID(p.id);
             setResult(null);
-            setCreating(false);
+            setEditing(null);
           }}
         />
       ) : (
@@ -151,10 +170,21 @@ export function PDFReview({ message }: { message: Message }) {
                 ? "Extract & validate PDF"
                 : "Extract PDF text"}
           </button>
+          {parserID > 0 && (
+            <button
+              class="btn"
+              disabled={busy || !config}
+              onClick={() =>
+                setEditing(parsers.find((p) => p.id === parserID) || null)
+              }
+            >
+              Edit selected parser
+            </button>
+          )}
           <button
             class="btn"
             disabled={busy || !config}
-            onClick={() => setCreating(true)}
+            onClick={() => setEditing({ ...newStatementParser })}
           >
             Create PDF parser
           </button>
@@ -175,8 +205,9 @@ export function PDFReview({ message }: { message: Message }) {
           </p>
           {result.parse_error && (
             <div class="notice error" role="alert">
-              {result.parse_error}. The extracted text is available below.
-              Nothing imported.
+              {result.parse_error}. Any rows shown below are incomplete or
+              unvalidated; nothing imported. The extracted text is available for
+              diagnosis.
             </div>
           )}
           {result.statement && (
@@ -185,46 +216,88 @@ export function PDFReview({ message }: { message: Message }) {
                 class={"notice " + (result.statement.balanced ? "" : "error")}
                 role="status"
               >
-                {result.statement.transactions.length} transactions found.{" "}
-                {result.statement.balanced
-                  ? result.statement.rounding_accepted
-                    ? `Balance check passed with ${money(result.statement.discrepancy, "INR")} rounding (within ${result.statement.balance_tolerance_paise} paise).`
-                    : "Balance check passed."
-                  : `Flagged for review. Balance difference: ${money(result.statement.discrepancy, "INR")}.`}{" "}
-                Preview only; nothing imported.
+                {result.statement.transactions.length} transactions read.{" "}
+                {result.parse_error
+                  ? "Validation failed; partial results only."
+                  : result.statement.balanced
+                    ? result.statement.rounding_accepted
+                      ? `Balance check passed with ${money(result.statement.discrepancy, "INR")} rounding (within ${result.statement.balance_tolerance_paise} paise).`
+                      : "Balance check passed."
+                    : `Flagged for review. Balance difference: ${money(result.statement.discrepancy, "INR")}.`}{" "}
+                {result.imported
+                  ? `${result.imported.already_imported ? "Already imported" : "Imported"}: ${result.imported.count} transactions. No duplicates added.`
+                  : "Preview only; nothing imported yet."}
               </div>
-              <div class="pdf-facts">
-                <div>
-                  <span class="eyebrow">Statement account</span>
-                  {result.statement.issuer} ·{" "}
-                  {result.statement.account_kind === "bank"
-                    ? "Bank account"
-                    : "Credit card"}{" "}
-                  •• {result.statement.account}
-                </div>
-                <div>
-                  <span class="eyebrow">Statement date</span>
-                  {dateLabel(result.statement.date)}
-                </div>
-                <div>
-                  <span class="eyebrow">Payment due</span>
-                  {dateLabel(result.statement.due_date)}
-                </div>
-                <div>
-                  <span class="eyebrow">Total due</span>
-                  {money(result.statement.total_due, "INR")}
-                </div>
-                <div>
-                  <span class="eyebrow">Minimum due</span>
-                  {money(result.statement.minimum_due, "INR")}
-                </div>
-              </div>
+              {!!result.fingerprint &&
+                !result.parse_error &&
+                result.statement.balanced &&
+                !result.imported && (
+                  <button
+                    class="btn primary"
+                    disabled={busy}
+                    onClick={async () => {
+                      setBusy(true);
+                      setError("");
+                      try {
+                        const response = await api<PDFResult>(
+                          `messages/${message.id}/pdf`,
+                          {
+                            part,
+                            parser_id: parserID,
+                            import: true,
+                            fingerprint: result.fingerprint,
+                          },
+                        );
+                        setResult(response);
+                        imported?.();
+                      } catch (e) {
+                        setError((e as Error).message);
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    {busy
+                      ? "Importing…"
+                      : `Import ${result.statement.transactions.length} transactions`}
+                  </button>
+                )}
+              {!!result.statement.account &&
+                !!result.statement.date &&
+                !!result.statement.due_date && (
+                  <div class="pdf-facts">
+                    <div>
+                      <span class="eyebrow">Statement account</span>
+                      {result.statement.issuer} ·{" "}
+                      {result.statement.account_kind === "bank"
+                        ? "Bank account"
+                        : "Credit card"}{" "}
+                      •• {result.statement.account}
+                    </div>
+                    <div>
+                      <span class="eyebrow">Statement date</span>
+                      {dateLabel(result.statement.date)}
+                    </div>
+                    <div>
+                      <span class="eyebrow">Payment due</span>
+                      {dateLabel(result.statement.due_date)}
+                    </div>
+                    <div>
+                      <span class="eyebrow">Total due</span>
+                      {money(result.statement.total_due, "INR")}
+                    </div>
+                    <div>
+                      <span class="eyebrow">Minimum due</span>
+                      {money(result.statement.minimum_due, "INR")}
+                    </div>
+                  </div>
+                )}
               {result.statement.warnings.map((w) => (
                 <p class="hint" key={w}>
                   {w}
                 </p>
               ))}
-              <details class="statement-rows">
+              <details class="statement-rows" open>
                 <summary>
                   Extracted transactions ({result.statement.transactions.length}
                   )

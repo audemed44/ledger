@@ -17,7 +17,7 @@ import (
 )
 
 const maxText = 1 << 20
-const statementReason = "Statement attachment — PDF parsing arrives in phase 2"
+const statementReason = "PDF statement — review and import"
 
 type Attachment struct {
 	Part        int    `json:"part"`
@@ -235,7 +235,7 @@ func (s *Store) ReviewMessage(id int64) (Message, error) {
 // queued bodies only: cursor, IDs, imported transactions and archives stay intact.
 // Individual missing archives remain visible instead of preventing app startup.
 func (s *Store) recoverArchivedText() error {
-	const version = "html-text-v1"
+	const version = "html-text-pdf-v2"
 	saved, err := s.Setting("mail-text-version")
 	if err != nil || saved == version {
 		return err
@@ -286,7 +286,7 @@ func (s *Store) recoverQueuedText(all bool) error {
 			if e != nil {
 				_, err = s.DB.Exec("UPDATE messages SET reason=? WHERE id=? AND state='queued'", reason, id)
 			} else {
-				_, err = s.DB.Exec("UPDATE messages SET body=?,reason=? WHERE id=? AND state='queued'", decoded.Body, reason, id)
+				_, err = s.DB.Exec("UPDATE messages SET body=?,reason=?,has_pdf=? WHERE id=? AND state='queued'", decoded.Body, reason, decoded.HasPDF, id)
 			}
 			if err != nil {
 				return fmt.Errorf("recover archived text: %w", err)

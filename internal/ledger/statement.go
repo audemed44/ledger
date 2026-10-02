@@ -49,9 +49,9 @@ func ParseHDFCStatementWithTolerance(text string, tolerance int64) (Statement, e
 		return Statement{}, errors.New("balance tolerance must be between 0 and 99 paise")
 	}
 
-	s := Statement{Issuer: "HDFC", AccountKind: "card", Transactions: []Transaction{}, Warnings: []string{}}
-	if !strings.Contains(strings.ToLower(text), "hdfc") || !strings.Contains(text, "NeuCoins") || !strings.Contains(text, "PREVIOUS STATEMENT DUES") {
-		return s, errors.New("unsupported statement layout; expected HDFC Tata Neu")
+	s := Statement{BalanceTolerancePaise: tolerance, Issuer: "HDFC", AccountKind: "card", Transactions: []Transaction{}, Warnings: []string{}}
+	if !strings.Contains(strings.ToLower(text), "hdfc") || !strings.Contains(text, "PREVIOUS STATEMENT DUES") {
+		return s, errors.New("unsupported statement layout; expected HDFC credit card summary")
 	}
 	lines := strings.Split(text, "\n")
 	summaryStart, summaryEnd, dueStart := -1, -1, -1
@@ -137,6 +137,7 @@ func ParseHDFCStatementWithTolerance(text string, tolerance int64) (Statement, e
 	}
 	loc, _ := time.LoadLocation("Asia/Kolkata")
 	var debits, credits int64
+	var rowErrors []error
 	table := false
 	for i, line := range lines {
 		if strings.Contains(line, "TRANSACTION DESCRIPTION") && strings.Contains(line, "AMOUNT") {
@@ -147,19 +148,23 @@ func ParseHDFCStatementWithTolerance(text string, tolerance int64) (Statement, e
 			continue
 		}
 		if !table {
-			return s, fmt.Errorf("dated row outside a recognised table on line %d", i+1)
+			rowErrors = append(rowErrors, fmt.Errorf("dated row outside a recognised table on line %d", i+1))
+			continue
 		}
 		m := statementRow.FindStringSubmatch(line)
 		if m == nil {
-			return s, fmt.Errorf("unparsed transaction on line %d", i+1)
+			rowErrors = append(rowErrors, fmt.Errorf("unparsed transaction on line %d", i+1))
+			continue
 		}
 		date, e := time.ParseInLocation("02/01/2006 15:04", m[1]+" "+m[2], loc)
 		if e != nil {
-			return s, fmt.Errorf("invalid date on line %d", i+1)
+			rowErrors = append(rowErrors, fmt.Errorf("invalid date on line %d", i+1))
+			continue
 		}
 		amount, e := MinorUnits(m[5])
 		if e != nil {
-			return s, fmt.Errorf("invalid amount on line %d", i+1)
+			rowErrors = append(rowErrors, fmt.Errorf("invalid amount on line %d", i+1))
+			continue
 		}
 		direction := "debit"
 		if m[4] == "+" {
@@ -174,10 +179,13 @@ func ParseHDFCStatementWithTolerance(text string, tolerance int64) (Statement, e
 		return s, errors.New("no statement transactions found")
 	}
 	if debits != s.Purchases {
-		return s, errors.New("transaction debits do not equal summary purchases")
+		rowErrors = append(rowErrors, errors.New("transaction debits do not equal summary purchases"))
 	}
 	if credits != s.Payments {
-		return s, errors.New("transaction credits do not equal summary payments")
+		rowErrors = append(rowErrors, errors.New("transaction credits do not equal summary payments"))
+	}
+	if len(rowErrors) > 0 {
+		return s, errors.Join(rowErrors...)
 	}
 	s.Discrepancy, _ = balanceDifference(s.AccountKind, s.Opening, debits, credits, s.FinanceCharges, s.TotalDue)
 	s.BalanceTolerancePaise = tolerance
