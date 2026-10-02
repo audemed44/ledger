@@ -1,6 +1,6 @@
-.env
-/data/
+/web/dist/
+/frontend/node_modules/
+/frontend/*.tsbuildinfo
 /ledger
-frontend/node_modules/
-web/dist/
-*.tsbuildinfo
+/data/
+.env
