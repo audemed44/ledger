@@ -1,0 +1,6 @@
+.env
+/data/
+/ledger
+frontend/node_modules/
+web/dist/
+*.tsbuildinfo
