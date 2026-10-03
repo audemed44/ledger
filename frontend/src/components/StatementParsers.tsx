@@ -48,17 +48,27 @@ export function StatementParserForm({
         <span class="eyebrow">Statement layout</span>
         <select
           value={parser.adapter}
-          onChange={(e) => setParser((p) => ({ ...p, adapter: e.currentTarget.value }))}
+          onChange={(e) => {
+            const adapter = e.currentTarget.value;
+            setParser((p) => ({
+              ...p,
+              adapter,
+              // A name that's still another layout's default follows the layout.
+              name: config.adapters.some((a) => a.name === p.name)
+                ? config.adapters.find((a) => a.id === adapter)?.name || p.name
+                : p.name,
+            }));
+          }}
         >
           {config.adapters.map((a) => (
             <option value={a.id} key={a.id}>
-              {a.name} — {a.description}
+              {a.name}
             </option>
           ))}
         </select>
         <span class="hint">
-          Checks HDFC credit card summaries and dated transaction tables. Card branding does not
-          select the format; unsupported structures are flagged.
+          {config.adapters.find((a) => a.id === parser.adapter)?.description}. Lines must add up to
+          the statement’s totals; anything the layout doesn’t recognise is flagged, not guessed.
         </span>
       </label>
       <label class="field">

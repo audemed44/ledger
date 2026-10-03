@@ -240,6 +240,28 @@ export function PDFReview({ message, imported }: { message: Message; imported?: 
                 )}
               {!!result.statement.account &&
                 !!result.statement.date &&
+                result.statement.account_kind === "bank" && (
+                  <div class="pdf-facts">
+                    <div>
+                      <span class="eyebrow">Statement account</span>
+                      {result.statement.issuer} · Bank account •• {result.statement.account}
+                    </div>
+                    <div>
+                      <span class="eyebrow">Statement to</span>
+                      {dateLabel(result.statement.date)}
+                    </div>
+                    <div>
+                      <span class="eyebrow">Opening balance</span>
+                      {money(result.statement.opening, "INR")}
+                    </div>
+                    <div>
+                      <span class="eyebrow">Closing balance</span>
+                      {money(result.statement.total_due, "INR")}
+                    </div>
+                  </div>
+                )}
+              {!!result.statement.account &&
+                !!result.statement.date &&
                 !!result.statement.due_date && (
                   <div class="pdf-facts">
                     <div>
@@ -258,7 +280,9 @@ export function PDFReview({ message, imported }: { message: Message; imported?: 
                     </div>
                     <div>
                       <span class="eyebrow">Total due</span>
-                      {money(result.statement.total_due, "INR")}
+                      {result.statement.total_due < 0
+                        ? `${money(-result.statement.total_due, "INR")} in credit`
+                        : money(result.statement.total_due, "INR")}
                     </div>
                     <div>
                       <span class="eyebrow">Minimum due</span>
