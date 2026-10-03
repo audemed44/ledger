@@ -58,7 +58,9 @@ Date layouts are Go's: `02-Jan-2006`, `2006-01-02`, `02/01/2006 15:04`.
   transfers land on the same account. Parsers from before account types
   existed stay "unknown" until you set one.
 - **Ignore** as the direction keeps matching emails (declined
-  transactions, say) out of the ledger and out of the inbox.
+  transactions, say) out of the ledger and out of the inbox. An ignore
+  parser needs no body pattern: without one, it ignores every email from
+  the sender whose subject matches.
 - An email must match **exactly one** parser, once. If two parsers match,
   or a body matches twice, it stays in the inbox.
 - Saving a parser retries the whole backlog. Editing or deleting a parser
@@ -103,28 +105,17 @@ its file name, and archived. Review and import it as usual; with
 uploads with a similar file name import themselves. Uploading the same
 file again changes nothing. PDFs can be up to 18 MiB.
 
-The link emails themselves will wait in the inbox. To keep them out, make
-an alert parser for them with **Ignore** as the direction and, under
-Advanced, a body pattern of a phrase they contain.
+The link emails themselves will wait in the inbox; **Ignore emails like
+this** on one keeps them out (see below).
 
-- **Passwords**: set `LEDGER_PDF_PASSWORDS=Password1|Password2|…` (up to
-  32; a password can't contain `|`). A parser tries all of them, or one
-  slot. Only the slot number is saved, so reordering the list changes what
-  a slot means. Unencrypted PDFs are always tried first.
-- **Validation**: every dated row in the transaction table must parse, and
-  the debit and credit rows must equal the summary's purchases and
-  payments exactly. The final balance may differ from the summary by up to
-  the parser's tolerance (0–99 paise, default 99) for rounding. Statements
-  with finance charges are flagged until reconciliation can handle them.
-  A statement that fails keeps the rows it could read, for diagnosis, and
-  can't be imported.
-- **One card per statement**: supplementary or ambiguous card numbers are
-  rejected rather than assigned to the primary card.
-- **No duplicates**: the same statement imported again, from the same
-  email or a resent one, changes nothing. A *different* statement for the
-  same account and date is refused.
-- Deleting a statement parser keeps its statements, transactions and
-  emails.
+## Ignoring emails
+
+OTPs, notices and promotions don't belong in the ledger. Open one in the
+inbox and choose **Ignore emails like this**: Ledger saves an ignore
+parser for that exact sender and a subject like this one (numbers and month
+names may differ, so every OTP matches), then retries the backlog so the
+rest leave the inbox too. Ignored mail stays archived. The rule is listed
+with the alert parsers, where you can edit or delete it.
 
 ## Reconciliation
 

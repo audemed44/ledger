@@ -32,6 +32,25 @@ func (s *Server) messageRoutes(mux *http.ServeMux) {
 		}
 		jsonResponse(w, m)
 	})
+	// Ignore saves a rule ignoring emails like this one, then retries the
+	// backlog so others like it leave the inbox too.
+	mux.HandleFunc("POST /api/messages/{id}/ignore", func(w http.ResponseWriter, r *http.Request) {
+		p, err := s.Store.IgnoreLike(pathID(r))
+		if errors.Is(err, sql.ErrNoRows) {
+			failure(w, 404, "Message not found")
+			return
+		}
+		if err != nil {
+			failure(w, 400, err.Error())
+			return
+		}
+		n, err := s.Store.Reprocess()
+		if err != nil {
+			failure(w, 500, "Rule saved, but retrying the backlog stopped")
+			return
+		}
+		jsonResponse(w, map[string]any{"parser": p, "processed": n})
+	})
 	mux.HandleFunc("POST /api/reprocess", func(w http.ResponseWriter, r *http.Request) {
 		n, err := s.Store.Reprocess()
 		if err != nil {

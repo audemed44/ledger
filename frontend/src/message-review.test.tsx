@@ -491,3 +491,24 @@ it("uploads a PDF statement from the inbox and opens it for review", async () =>
   expect((sent!.get("file") as File).name).toBe("statement.pdf");
   await screen.findByText("Review and import the PDF");
 });
+
+it("ignores emails like this one after confirming", async () => {
+  const done = vi.fn(),
+    closed = vi.fn();
+  const fetcher = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async () => reply({ parser: {}, processed: 3 }));
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  render(
+    <MessageReview
+      message={{ ...message, subject: "482913 is your OTP" }}
+      close={closed}
+      createParser={() => {}}
+      imported={done}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: /Ignore emails like this/ }));
+  await waitFor(() => expect(closed).toHaveBeenCalled());
+  expect(fetcher.mock.calls[0][0]).toBe("/api/messages/1/ignore");
+  expect(done).toHaveBeenCalled();
+});

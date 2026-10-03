@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/audemed44/ledger/internal/alerts"
+	"github.com/audemed44/ledger/internal/pattern"
 	"github.com/audemed44/ledger/internal/statements"
 )
 
@@ -213,4 +214,35 @@ func (s *Store) AddStatementTrigger(parserID, messageID int64, part int) (statem
 	}
 	_, err = s.saveDefinition("statement_parsers", target.ID, raw)
 	return t, err
+}
+
+// IgnoreLike saves a rule that ignores emails like this one: the same
+// sender, and a subject like its subject (numbers and month names may
+// change), whatever the body says. Ignored mail stays archived.
+func (s *Store) IgnoreLike(messageID int64) (alerts.Parser, error) {
+	m, err := s.Message(messageID)
+	if err != nil {
+		return alerts.Parser{}, err
+	}
+	if m.Sender == "" {
+		return alerts.Parser{}, errors.New("This email has no readable sender to match")
+	}
+	subject := pattern.Whole(m.Subject)
+	if subject == "" {
+		subject = "^$"
+	}
+	name := strings.TrimSpace(m.Subject)
+	if r := []rune(name); len(r) > 60 {
+		name = string(r[:60]) + "…"
+	}
+	return s.SaveParser(alerts.Parser{
+		Name:        "Ignore: " + name,
+		AccountKind: "unknown",
+		Sender:      strings.ToLower(m.Sender),
+		Subject:     subject,
+		Timezone:    "Asia/Kolkata",
+		Currency:    "INR",
+		Direction:   "ignore",
+		Enabled:     true,
+	})
 }
