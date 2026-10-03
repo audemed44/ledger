@@ -177,6 +177,47 @@ func TestHDFCBankSavings(t *testing.T) {
 	})
 }
 
+func TestHDFCBankNetBankingDownload(t *testing.T) {
+	text := fixture.HDFCBankNetBankingStatement
+	check(t, "hdfc-savings", layout(text), Statement{
+		Issuer: "HDFC", AccountKind: "bank", Account: "4242", Date: "2026-09-30",
+		Opening: 2000000, TotalDue: 2749950,
+	}, []string{
+		"2026-09-02 -500.50 UPI-EXAMPLE GROCER STORE-GROCER@OKEXAMPLE-EXMP0000001-600000000001-UPI",
+		"2026-09-05 -2000.00 ATW-400000XXXXXX4242-EXAMPLE TOWN",
+		"2026-09-25 +9000.00 NEFT CR-EXMP0000001-EXAMPLE EMPLOYER PRIVATE LIMITED",
+		"2026-09-28 +1000.00 UPI-EXAMPLE FRIEND-FRIEND@OKEXAMPLE-EXMP0000002-600000000002-FOR DINNER",
+	})
+	s, _ := ParseWith("hdfc-savings", layout(text))
+	if s.Transactions[1].Reference != "0000000000001001" {
+		t.Fatal("reference", s.Transactions[1])
+	}
+	// A withdrawal moved into the deposit column breaks the running balance.
+	moved := strings.Replace(text, "2,000.00"+strings.Repeat(" ", 29), strings.Repeat(" ", 29)+"2,000.00", 1)
+	failsClosed(t, "hdfc-savings", map[string]Text{
+		"missing row":     layout(strings.Join(dropLine(text, "ATW-400000XXXXXX4242"), "\n")),
+		"running balance": layout(strings.Replace(text, "17,499.50", "17,500.50", 1)),
+		"wrong column":    layout(moved),
+		"other account":   layout(strings.Replace(text, "50100000004242 OTHER", "50100000008080 OTHER", 1)),
+		"count":           layout(strings.Replace(text, "  2                          2  ", "  3                          2  ", 1)),
+		"no summary":      layout(strings.Replace(text, "STATEMENT SUMMARY", "", 1)),
+	})
+	if moved == text {
+		t.Fatal("wrong column case didn't apply")
+	}
+}
+
+// dropLine is text without its lines containing needle.
+func dropLine(text, needle string) []string {
+	out := []string{}
+	for _, l := range strings.Split(text, "\n") {
+		if !strings.Contains(l, needle) {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
 // Each layout reads only its own bank's statements.
 func TestLayoutsRefuseOtherBanks(t *testing.T) {
 	fixtures := map[string]Text{

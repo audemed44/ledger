@@ -199,3 +199,64 @@ Date             Narration                                              Chq. / R
                                                                                                  **END OF STATEMENT**
                                                                                    HDFC BANK LIMITED
 `
+
+// HDFCBankNetBankingStatement is the same account's statement as NetBanking
+// downloads it, for September: 20,000.00 opening, two debits (2,500.50) and
+// two credits (10,000.00), 27,499.50 closing, over two pages with the
+// column heads on the first only. Narrations wrap below their rows, both at
+// and inside a word.
+const HDFCBankNetBankingStatement = `                                                                                                Page No .: 1
+
+
+                                                                                                                 Account Branch : EXAMPLE
+  MR EXAMPLE PERSON                                                                                              City           : EXAMPLE CITY
+  1 EXAMPLE STREET                                                                                               Currency       : INR
+                                                                                                                 Account No     : 50100000004242 OTHER
+                                                                                                                 Account Type : SAVINGS A/C
+
+  From : 01/09/2026                        To : 30/09/2026                                                       Statement of account
+    Date                                  Narration                                          Chq./Ref.No.                Value Dt        Withdrawal Amt.                 Deposit Amt.              Closing Balance
+
+ 02/09/26      UPI-EXAMPLE GROCER                                                            0000600000000001              02/09/26                      500.50                                               19,499.50
+
+              STORE-GROCER@OKEXAMPLE
+
+               -EXMP0000001-600000000001-UPI
+
+ 05/09/26      ATW-400000XXXXXX4242-EXAMPLE TOWN                                             0000000000001001              05/09/26                    2,000.00                                               17,499.50
+
+
+*Closing balance includes funds earmarked for hold and uncleared funds
+Contents of this statement will be considered correct if no error is reported within 30 days of receipt of statement.
+HDFC BANK LIMITED
+
+                                                                                                Page No .: 2
+
+
+                                                                                                                 Account Branch : EXAMPLE
+  MR EXAMPLE PERSON                                                                                              City           : EXAMPLE CITY
+  1 EXAMPLE STREET                                                                                               Currency       : INR
+                                                                                                                 Account No     : 50100000004242 OTHER
+                                                                                                                 Account Type : SAVINGS A/C
+
+  From : 01/09/2026                        To : 30/09/2026                                                       Statement of account
+ 25/09/26      NEFT CR-EXMP0000001-EXAMPLE EMPLOYER P                                        EXMPN00000000001              25/09/26                                                 9,000.00                  26,499.50
+
+               RIVATE LIMITED
+
+ 28/09/26      UPI-EXAMPLE FRIEND-FRIEND@OKEXAMPLE-                                          0000600000000002              28/09/26                                                 1,000.00                  27,499.50
+
+               EXMP0000002-600000000002-FOR DINNER
+
+              STATEMENT SUMMARY :-
+                                     Opening Balance                                           Dr Count                  Cr Count                Debits                      Credits                   Closing Bal
+                                       20,000.00                                                  2                          2                   2,500.50                    10,000.00                   27,499.50
+
+
+                    Generated On: 01-Oct-2026 09:00                                                                               Requesting Branch Code: NET
+
+*Closing balance includes funds earmarked for hold and uncleared funds
+Contents of this statement will be considered correct if no error is reported within 30 days of receipt of statement.
+HDFC BANK LIMITED
+
+`

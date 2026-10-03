@@ -21,7 +21,8 @@ binary that idles at about 11 MB of RAM.
   must add up to the statement's summary before anything can be imported.
   Import the first one by hand; later ones import themselves. Supported
   today: HDFC, ICICI, Axis and IDFC FIRST credit cards, and SBI and HDFC
-  Bank accounts.
+  Bank accounts (HDFC Bank's emailed SmartStatements and NetBanking
+  downloads).
 - **Reconciliation**: a statement line confirms the alert for it, lines
   with no alert are added, and alerts missing from the statement are
   flagged.
