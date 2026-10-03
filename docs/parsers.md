@@ -122,6 +122,28 @@ parser.
 A statement for a month with no transactions imports too, as long as its
 summary says nothing moved.
 
+### Statements behind a link (HDFC SmartStatement)
+
+HDFC Bank emails a "View your SmartStatement" link instead of attaching
+the account statement. Ledger follows it the way the bank's page does: it
+sends the statement password, and downloads the PDF that "Save as PDF"
+gives. That PDF is filed as an email from `hdfc-smartstatement@ledger.invalid`
+(subject "HDFC SmartStatement:" and the bank's file name), so it's reviewed,
+imported automatically and reconciled like any other statement. The link
+email leaves the inbox once the statement is downloaded.
+
+- **Password**: the slot of your **HDFC Bank Account** statement parser,
+  or, if that tries every password, each configured one in turn until the
+  bank accepts one. Set the slot to send only the right password.
+- **Only HDFC's server** (`https://smartstatements.hdfc.bank.in`) is ever
+  sent a password; a link anywhere else is left alone.
+- **Links expire after about three months.** An expired link stays in the
+  inbox saying so, and isn't tried again: download that statement from
+  NetBanking and use **Upload PDF**. Any other failure (the bank down, a
+  changed page) also leaves the email in the inbox with the reason, and
+  Retry backlog tries again.
+- Set `LEDGER_FETCH_STATEMENT_LINKS=false` to turn this off.
+
 ### Uploading a statement
 
 Some banks email a link to a download page rather than the PDF. Download

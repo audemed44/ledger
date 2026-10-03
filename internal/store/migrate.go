@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS transactions(
   status TEXT NOT NULL, issuer TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS transactions_date ON transactions(date);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS statement_links(message_id INTEGER PRIMARY KEY REFERENCES messages(id), outcome TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS transfer_rules(
   id INTEGER PRIMARY KEY, issuer TEXT NOT NULL, pattern TEXT NOT NULL, example TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS card_links(

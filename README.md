@@ -74,6 +74,7 @@ they belong together.
 | `LEDGER_POLL_INTERVAL` | `15m` | At least `1m` |
 | `LEDGER_BACKFILL` | `false` | Import mail already under the label (see below) |
 | `LEDGER_PDF_PASSWORDS` | empty | Statement passwords, separated by `\|` |
+| `LEDGER_FETCH_STATEMENT_LINKS` | `true` | Download HDFC Bank statements from the SmartStatement link in their emails |
 | `LEDGER_SECURE_COOKIES` | `true` | |
 | `LEDGER_DATA_DIR` | `/data` | |
 | `LEDGER_LISTEN` | `:8080` | |

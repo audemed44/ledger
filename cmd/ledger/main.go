@@ -20,6 +20,7 @@ import (
 
 	"github.com/audemed44/ledger/internal/gmail"
 	"github.com/audemed44/ledger/internal/server"
+	"github.com/audemed44/ledger/internal/smartstatement"
 	"github.com/audemed44/ledger/internal/statements"
 	"github.com/audemed44/ledger/internal/store"
 	"github.com/audemed44/ledger/web"
@@ -65,6 +66,9 @@ func main() {
 	}
 	defer db.Close()
 	db.PDFPasswords = strings.Split(os.Getenv("LEDGER_PDF_PASSWORDS"), "|")
+	if env("LEDGER_FETCH_STATEMENT_LINKS", "true") == "true" && !*demo {
+		db.Statements = smartstatement.New()
+	}
 
 	cfg := gmail.Config{
 		User:     os.Getenv("GMAIL_USER"),

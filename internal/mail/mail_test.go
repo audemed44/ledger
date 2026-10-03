@@ -49,3 +49,12 @@ func TestTextRepairsLatin1SpacesAndLineEndings(t *testing.T) {
 		t.Fatalf("%q", m.Body)
 	}
 }
+
+func TestLinksFromHTMLPart(t *testing.T) {
+	m := Decode([]byte("From: a@example.invalid\r\nMIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=x\r\n\r\n" +
+		"--x\r\nContent-Type: text/plain\r\n\r\nView your statement.\r\n" +
+		"--x\r\nContent-Type: text/html\r\n\r\n<p><a href=\"https://bank.example.invalid/view?jobkey=1&amp;a=2\">View</a> <a href=\"mailto:x@y\">mail</a></p>\r\n--x--\r\n"))
+	if len(m.Links) != 1 || m.Links[0] != "https://bank.example.invalid/view?jobkey=1&a=2" || m.BodyFormat != "plain" {
+		t.Fatalf("%+v", m)
+	}
+}

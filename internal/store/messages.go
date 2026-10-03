@@ -98,12 +98,16 @@ func (s *Store) ingested(id int64) error {
 	return s.FindTransfers()
 }
 
-// process runs the alert parsers, then automatic statement import.
+// process runs the alert parsers, automatic statement import, and then
+// downloads a statement the email links to.
 func (s *Store) process(id int64) error {
 	if err := s.Process(id); err != nil {
 		return err
 	}
-	return s.AutoImport(context.Background(), id)
+	if err := s.AutoImport(context.Background(), id); err != nil {
+		return err
+	}
+	return s.fetchLinked(context.Background(), id)
 }
 
 // writeArchive writes the file atomically: a synced temporary file renamed

@@ -21,6 +21,9 @@ services:
       # PDF statement passwords, separated by |. Statement parsers refer to
       # them by position (Password 1, 2, …); the values never leave the server.
       - LEDGER_PDF_PASSWORDS=${LEDGER_PDF_PASSWORDS}
+      # HDFC Bank emails a SmartStatement link instead of a PDF; Ledger
+      # downloads the statement from it. Set false to upload by hand instead.
+      # - LEDGER_FETCH_STATEMENT_LINKS=false
       # Session cookies need HTTPS. Set false only for plain-HTTP testing.
       # - LEDGER_SECURE_COOKIES=false
     volumes:
