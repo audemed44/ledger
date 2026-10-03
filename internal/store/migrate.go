@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS transactions(
   status TEXT NOT NULL, issuer TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS transactions_date ON transactions(date);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS transfer_rules(
+  id INTEGER PRIMARY KEY, issuer TEXT NOT NULL, pattern TEXT NOT NULL, example TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS card_links(
   issuer TEXT NOT NULL, card TEXT NOT NULL, account TEXT NOT NULL, PRIMARY KEY(issuer,card));`
 
@@ -39,6 +41,7 @@ func (s *Store) migrate() error {
 		s.migrateStatementImports,
 		s.migrateAlertLinks,
 		s.migratePlaceholders,
+		s.migrateTransfers,
 		s.mergeDuplicateStatementParsers,
 		s.retireBeforeBackfill,
 		s.recoverArchivedText,
@@ -67,6 +70,22 @@ func (s *Store) migrateAlertLinks() error {
 // parser's description, to be replaced by a statement's.
 func (s *Store) migratePlaceholders() error {
 	return s.addColumn("transactions", "placeholder", "INTEGER NOT NULL DEFAULT 0")
+}
+
+// migrateTransfers adds how a transaction was found to be a transfer, its
+// other side, and whether you said it isn't one.
+func (s *Store) migrateTransfers() error {
+	for _, c := range [][2]string{
+		{"transfer", "TEXT NOT NULL DEFAULT ''"},
+		{"transfer_of", "INTEGER"},
+		{"no_transfer", "INTEGER NOT NULL DEFAULT 0"},
+	} {
+		if err := s.addColumn("transactions", c[0], c[1]); err != nil {
+			return err
+		}
+	}
+	_, err := s.DB.Exec("CREATE INDEX IF NOT EXISTS transactions_amount ON transactions(amount)")
+	return err
 }
 
 // addColumn adds a column unless it exists. table and column are constants.

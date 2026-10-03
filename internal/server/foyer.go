@@ -21,7 +21,7 @@ func (s *Server) widget(w http.ResponseWriter, r *http.Request) {
 			"label":   "Debits this month",
 			"value":   ledger.Decimal(t.Debit),
 			"unit":    t.Currency,
-			"caption": "Includes transfers between accounts",
+			"caption": "Excludes transfers between your accounts",
 		})
 	}
 	if len(stats) == 0 {

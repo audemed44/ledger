@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/audemed44/ledger/internal/alerts"
 	"github.com/audemed44/ledger/internal/fixture"
 	"github.com/audemed44/ledger/internal/ledger"
 	"github.com/audemed44/ledger/internal/statements"
@@ -1026,4 +1027,108 @@ func TestMergeParsersKeepsEveryWording(t *testing.T) {
 	if again, _ := s.AddWording(merged.ID, merged.Wordings[0]); len(again.Wordings) != 1 {
 		t.Fatal("duplicate wording added")
 	}
+}
+
+func TestTransfersBetweenYourAccounts(t *testing.T) {
+	s := testStore(t)
+	parser := func(name, issuer, kind, direction string) alerts.Parser {
+		p := fixture.AlertParser()
+		p.Name, p.Issuer, p.AccountKind, p.Direction = name, issuer, kind, direction
+		p.Sender = strings.ToLower(strings.ReplaceAll(name, " ", "")) + "@example.invalid"
+		p, err := s.SaveParser(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	hdfcOut := parser("HDFC out", "HDFC", "bank", "debit")
+	sbiIn := parser("SBI in", "SBI", "bank", "credit")
+	cardIn := parser("Card in", "ICICI", "card", "credit")
+	mail := func(p alerts.Parser, key, body string) int64 {
+		raw := strings.Replace(string(fixture.Mail(key, body)), "alerts@example.invalid", p.Sender, 1)
+		id, err := s.Ingest([]byte(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	kinds := func() map[string]string {
+		rows, _ := s.Transactions(Filter{})
+		out := map[string]string{}
+		for _, r := range rows {
+			out[r.Issuer+" "+r.Direction+" "+ledger.Decimal(r.Amount)] = r.Transfer
+		}
+		return out
+	}
+
+	// HDFC → SBI by UPI, a day apart: a transfer, out of the totals.
+	mail(hdfcOut, "upi-out", "INR 2,000.00 at SELF card 9001 on 2026-10-02")
+	sbiSide := mail(sbiIn, "upi-in", "INR 2,000.00 at UPI/CR/HDFC card 4556 on 2026-10-03")
+	// A purchase and its refund on one account aren't a transfer.
+	mail(hdfcOut, "buy", "INR 300.00 at Shop card 9001 on 2026-10-05")
+	mail(parser("HDFC refund", "HDFC", "bank", "credit"), "refund", "INR 300.00 at Shop card 9001 on 2026-10-06")
+	// Two accounts receiving the same amount: ambiguous, left alone.
+	mail(hdfcOut, "rent", "INR 999.00 at Rent card 9001 on 2026-10-07")
+	mail(sbiIn, "a", "INR 999.00 at Someone card 4556 on 2026-10-07")
+	mail(cardIn, "b", "INR 999.00 at Payment card 4242 on 2026-10-08")
+	got := kinds()
+	if got["HDFC debit 2000.00"] != "paired" || got["SBI credit 2000.00"] != "paired" ||
+		got["HDFC credit 300.00"] != "" || got["HDFC debit 999.00"] != "" {
+		t.Fatal(got)
+	}
+	totals, _ := s.MonthTotals("2026-10")
+	if totals[0].Debit != 129900 {
+		t.Fatal("transfer counted in spending", totals)
+	}
+	if rows, _ := s.Transactions(Filter{Kind: "transfers"}); len(rows) != 2 {
+		t.Fatal(len(rows))
+	}
+
+	// "Not a transfer" unpairs both sides, for good.
+	rows, _ := s.Transactions(Filter{Kind: "transfers"})
+	if err := s.SetTransfer(rows[0].ID, false); err != nil {
+		t.Fatal(err)
+	}
+	s.Reprocess()
+	if rows, _ = s.Transactions(Filter{Kind: "transfers"}); len(rows) != 0 {
+		t.Fatal("unpaired transfer paired again", rows)
+	}
+
+	// A rule treats SBI's sweeps as transfers, now and later.
+	sweep := mail(sbiIn, "sweep1", "INR 5,000.00 at SWEEP TRF CREDT card 4556 on 2026-10-10")
+	_ = sweep
+	swept, _ := s.Transactions(Filter{Search: "SWEEP"})
+	rule, err := s.TransferRuleLike(swept[0].ID)
+	if err != nil || rule.Issuer != "SBI" {
+		t.Fatal(rule, err)
+	}
+	mail(sbiIn, "sweep2", "INR 15,000.00 at SWEEP TRF CREDT card 4556 on 2026-10-20")
+	if rows, _ = s.Transactions(Filter{Search: "SWEEP", Kind: "transfers"}); len(rows) != 2 || rows[0].Transfer != "rule" {
+		t.Fatal(rows)
+	}
+	if err = s.DeleteTransferRule(rule.ID); err != nil {
+		t.Fatal(err)
+	}
+	if rows, _ = s.Transactions(Filter{Kind: "transfers"}); len(rows) != 0 {
+		t.Fatal("rule's transfers kept", rows)
+	}
+
+	// Re-reading one side of a pair unpairs the other.
+	mail(hdfcOut, "card-bill", "INR 7,777.00 at Card bill card 9001 on 2026-10-25")
+	mail(cardIn, "card-paid", "INR 7,777.00 at Payment card 4242 on 2026-10-25")
+	if rows, _ = s.Transactions(Filter{Kind: "transfers"}); len(rows) != 2 {
+		t.Fatal("card bill not paired", rows)
+	}
+	h, _ := s.HandledBy(cardIn)
+	s.DeleteParser(cardIn.ID)
+	s.Reread(h.IDs)
+	if rows, _ = s.Transactions(Filter{Search: "Card bill"}); len(rows) != 1 || rows[0].Transfer != "" {
+		t.Fatal("orphaned transfer side", rows)
+	}
+	// With the card's ₹999 credit gone too, the rent debit and SBI's ₹999
+	// credit are no longer ambiguous, so they pair.
+	if rows, _ = s.Transactions(Filter{Kind: "transfers"}); len(rows) != 2 || rows[0].Amount != 99900 {
+		t.Fatal(rows)
+	}
+	_ = sbiSide
 }

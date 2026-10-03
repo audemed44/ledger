@@ -103,3 +103,29 @@ it("keeps the transactions on screen while the ledger refreshes", async () => {
   expect(screen.queryByText("Loading activity…")).toBeNull();
   expect(screen.getByText("Example Shop")).toBeTruthy();
 });
+
+it("marks a transaction as a transfer from its actions", async () => {
+  const posts: string[] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
+    if (options?.method === "POST") posts.push(String(url));
+    return reply([
+      {
+        id: 7,
+        message_id: 1,
+        merchant: "SWEEP TFR DR",
+        account: "4556",
+        amount: 500000,
+        currency: "INR",
+        direction: "debit",
+        date: "2026-10-01",
+        reference: "",
+        status: "confirmed",
+        issuer: "SBI",
+      },
+    ]);
+  });
+  render(<TransactionsPage summary={summary} version={0} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Actions for SWEEP TFR DR" }));
+  fireEvent.click(screen.getByRole("button", { name: /Treat everything like “SWEEP TFR DR”/ }));
+  await waitFor(() => expect(posts).toEqual(["/api/transactions/7/transfer-rule"]));
+});

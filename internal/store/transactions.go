@@ -10,7 +10,9 @@ import (
 // and To are inclusive YYYY-MM-DD dates.
 type Filter struct {
 	Search, Account, Status, From, To string
-	Offset                            int
+	// Kind is "transfers", "spending" (everything else) or "" for both.
+	Kind   string
+	Offset int
 }
 
 // PageSize is how many transactions one page holds.
@@ -19,7 +21,8 @@ const PageSize = 100
 // Transactions returns one page of matching transactions, newest first.
 func (s *Store) Transactions(f Filter) ([]ledger.Transaction, error) {
 	query := `SELECT id,message_id,merchant,account,amount,currency,direction,date,reference,status,issuer,account_kind,
-  (statement_id IS NOT NULL AND source_part<0) OR alert_message_id IS NOT NULL, placeholder
+  (statement_id IS NOT NULL AND source_part<0) OR alert_message_id IS NOT NULL, placeholder,
+  transfer, coalesce(transfer_of,0)
 FROM transactions WHERE 1=1`
 	args := []any{}
 	if f.Search != "" {
@@ -35,6 +38,12 @@ FROM transactions WHERE 1=1`
 			query += " AND issuer || ' · ' || account=?"
 			args = append(args, f.Account)
 		}
+	}
+	switch f.Kind {
+	case "transfers":
+		query += " AND transfer!=''"
+	case "spending":
+		query += " AND transfer=''"
 	}
 	if f.Status != "" {
 		query += " AND status=?"
@@ -59,7 +68,8 @@ FROM transactions WHERE 1=1`
 	for rows.Next() {
 		var t ledger.Transaction
 		err = rows.Scan(&t.ID, &t.MessageID, &t.Merchant, &t.Account, &t.Amount, &t.Currency,
-			&t.Direction, &t.Date, &t.Reference, &t.Status, &t.Issuer, &t.AccountKind, &t.Matched, &t.Placeholder)
+			&t.Direction, &t.Date, &t.Reference, &t.Status, &t.Issuer, &t.AccountKind, &t.Matched, &t.Placeholder,
+			&t.Transfer, &t.TransferOf)
 		if err != nil {
 			return nil, err
 		}
@@ -97,12 +107,12 @@ type Total struct {
 }
 
 // MonthTotals sums transactions dated in month (YYYY-MM), per currency.
-// Dismissed ones don't count.
+// Dismissed ones and transfers between your accounts don't count.
 func (s *Store) MonthTotals(month string) ([]Total, error) {
 	rows, err := s.DB.Query(`SELECT currency,
   SUM(CASE WHEN direction='debit' THEN amount ELSE 0 END),
   SUM(CASE WHEN direction='credit' THEN amount ELSE 0 END)
-FROM transactions WHERE substr(date,1,7)=? AND status!='dismissed' GROUP BY currency ORDER BY currency`, month)
+FROM transactions WHERE substr(date,1,7)=? AND status!='dismissed' AND transfer='' GROUP BY currency ORDER BY currency`, month)
 	if err != nil {
 		return nil, err
 	}

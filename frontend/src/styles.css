@@ -1320,3 +1320,20 @@ label.btn.disabled {
   flex: 1;
   min-width: 0;
 }
+.row-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.row-more {
+  width: 26px;
+  height: 26px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.chip.transfer {
+  margin-left: 6px;
+  border-color: var(--accent);
+  color: var(--accent-hi);
+}

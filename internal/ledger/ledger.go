@@ -32,6 +32,10 @@ type Transaction struct {
 	// Placeholder is set when Merchant is the parser's description, the
 	// email having named no merchant.
 	Placeholder bool `json:"placeholder,omitempty"`
+	// Transfer is how it was found to move money between your accounts
+	// ("paired", "rule" or "manual"), and TransferOf the other side of a pair.
+	Transfer   string `json:"transfer,omitempty"`
+	TransferOf int64  `json:"transfer_of,omitempty"`
 }
 
 // Account is a card or bank account, identified by issuer, type and the last

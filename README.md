@@ -27,13 +27,15 @@ binary that idles at about 11 MB of RAM.
   flagged.
 - **Nothing lost**: mail no parser understands waits in the inbox with the
   reason, and so do statements that don't validate.
-- **Transactions**: filter by account, status and date, search, export CSV.
-  Money is kept in integer paise, per currency.
+- **Transactions**: filter by account, status, type and date, search,
+  export CSV. Money is kept in integer paise, per currency.
+- **Transfers**: money moving between your own accounts (card bills, UPI
+  to yourself) is paired and left out of spending; rules cover accounts
+  Ledger doesn't see, such as auto-sweeps into deposits.
 - **Foyer**: a widget with this month's debits and what needs review.
 
 Still to come: more statement layouts, categories and charts, card due
-dates (iCal and reminders), and subscription detection. Card payments and
-transfers between your own accounts still count in the monthly total.
+dates (iCal and reminders), and subscription detection.
 
 ## Install
 

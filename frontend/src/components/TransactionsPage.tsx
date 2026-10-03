@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { ArrowDownLeft, ArrowUpRight, Download } from "lucide-preact";
+import { ArrowDownLeft, ArrowUpRight, Download, MoreHorizontal } from "lucide-preact";
 import { api } from "../api";
 import { dateLabel, money } from "../lib";
 import type { Summary, Transaction } from "../types";
@@ -12,10 +12,22 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
     [from, setFrom] = useState(""),
     [to, setTo] = useState(""),
     [status, setStatus] = useState(""),
+    [kind, setKind] = useState(""),
+    [actions, setActions] = useState(0),
     [offset, setOffset] = useState(0),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
     [reload, setReload] = useState(0);
+  // act runs one of a row's actions, then reloads the list.
+  async function act(path: string, body: unknown) {
+    try {
+      await api(path, body);
+      setActions(0);
+      setReload((n) => n + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
   async function dismiss(t: Transaction, dismissed: boolean) {
     try {
       await api(`transactions/${t.id}/dismiss`, { dismissed });
@@ -30,11 +42,12 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
     from,
     to,
     status,
+    kind,
     offset: String(offset),
   }).toString();
   useEffect(() => {
     setOffset(0);
-  }, [search, account, from, to, status]);
+  }, [search, account, from, to, status, kind]);
   useEffect(() => {
     let current = true;
     setLoading(true);
@@ -111,6 +124,13 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
             <option value="dismissed">Dismissed</option>
           </select>
         </Field>
+        <Field label="Type">
+          <select value={kind} onChange={(e) => setKind(e.currentTarget.value)}>
+            <option value="">Everything</option>
+            <option value="spending">Spending and income</option>
+            <option value="transfers">Transfers between your accounts</option>
+          </select>
+        </Field>
       </div>
       <ErrorNote error={error} />
       {/* Refreshes keep the rows on screen, so the page doesn't jump. */}
@@ -166,6 +186,28 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
                   {t.status}
                   {t.matched ? " · matched" : ""}
                 </span>
+                {t.transfer && (
+                  <span
+                    class="chip transfer"
+                    title={
+                      t.transfer === "paired"
+                        ? "Paired with the other side, on another of your accounts"
+                        : t.transfer === "rule"
+                          ? "A transfer rule matched its description"
+                          : "Marked as a transfer"
+                    }
+                  >
+                    transfer
+                  </span>
+                )}
+                <button
+                  class="icon-btn row-more"
+                  aria-label={`Actions for ${t.merchant}`}
+                  aria-expanded={actions === t.id}
+                  onClick={() => setActions(actions === t.id ? 0 : t.id)}
+                >
+                  <MoreHorizontal size={15} />
+                </button>
                 {(t.status === "flagged" || t.status === "dismissed") && (
                   <button
                     class="text-link"
@@ -185,18 +227,45 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
                 {money(t.amount, t.currency)}
                 <span class="hint">{t.currency}</span>
               </div>
+              {actions === t.id && (
+                <div class="row-actions">
+                  {t.transfer ? (
+                    <button
+                      class="btn"
+                      onClick={() => act(`transactions/${t.id}/transfer`, { transfer: false })}
+                    >
+                      Not a transfer{t.transfer === "paired" ? " (unpair both sides)" : ""}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        class="btn"
+                        onClick={() => act(`transactions/${t.id}/transfer`, { transfer: true })}
+                      >
+                        Mark as a transfer
+                      </button>
+                      <button
+                        class="btn"
+                        onClick={() => act(`transactions/${t.id}/transfer-rule`, {})}
+                      >
+                        Treat everything like “{t.merchant}” as transfers
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </article>
           ))}
         </div>
       ) : (
         <Empty
           title={
-            search || account || from || to || status
+            search || account || from || to || status || kind
               ? "No matching transactions"
               : "Your first alert starts the story."
           }
         >
-          {search || account || from || to || status
+          {search || account || from || to || status || kind
             ? "Try widening your filters."
             : "Connect Gmail, then create a parser for your bank’s alerts. Transactions will appear here automatically."}
         </Empty>

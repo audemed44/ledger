@@ -78,7 +78,7 @@ func (s *Store) Reread(ids []int64) (reread, kept int, err error) {
 		}
 		reread++
 	}
-	return reread, kept, nil
+	return reread, kept, s.FindTransfers()
 }
 
 // undo removes what one parsed or ignored email recorded and queues it
@@ -104,6 +104,8 @@ func (s *Store) undo(id int64) (bool, error) {
 		return false, err
 	}
 	for _, q := range []string{
+		// The other side of a transfer pair loses its pair.
+		"UPDATE transactions SET transfer='',transfer_of=NULL WHERE transfer='paired' AND transfer_of IN (SELECT id FROM transactions WHERE message_id=? AND source_part<0)",
 		"DELETE FROM transactions WHERE message_id=? AND source_part<0",
 		// An alert that arrived after its statement only marked the line.
 		"UPDATE transactions SET alert_message_id=NULL WHERE alert_message_id=?",

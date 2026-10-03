@@ -31,6 +31,58 @@ func (s *Server) transactionRoutes(mux *http.ServeMux) {
 		jsonResponse(w, rows)
 	})
 	mux.HandleFunc("GET /api/transactions.csv", s.csv)
+	// Transfers: mark or unmark one by hand, or treat everything described
+	// like it as a transfer.
+	mux.HandleFunc("POST /api/transactions/{id}/transfer", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Transfer bool `json:"transfer"`
+		}
+		if !decode(w, r, &body) {
+			return
+		}
+		err := s.Store.SetTransfer(pathID(r), body.Transfer)
+		if errors.Is(err, sql.ErrNoRows) {
+			failure(w, 404, "Transaction not found")
+			return
+		}
+		if err != nil {
+			failure(w, 500, "Could not update transaction")
+			return
+		}
+		jsonResponse(w, map[string]bool{"ok": true})
+	})
+	mux.HandleFunc("POST /api/transactions/{id}/transfer-rule", func(w http.ResponseWriter, r *http.Request) {
+		rule, err := s.Store.TransferRuleLike(pathID(r))
+		if errors.Is(err, sql.ErrNoRows) {
+			failure(w, 404, "Transaction not found")
+			return
+		}
+		if err != nil {
+			failure(w, 400, err.Error())
+			return
+		}
+		jsonResponse(w, rule)
+	})
+	mux.HandleFunc("GET /api/transfer-rules", func(w http.ResponseWriter, r *http.Request) {
+		rules, err := s.Store.TransferRules()
+		if err != nil {
+			failure(w, 500, "Could not load transfer rules")
+			return
+		}
+		jsonResponse(w, rules)
+	})
+	mux.HandleFunc("DELETE /api/transfer-rules/{id}", func(w http.ResponseWriter, r *http.Request) {
+		err := s.Store.DeleteTransferRule(pathID(r))
+		if errors.Is(err, sql.ErrNoRows) {
+			failure(w, 404, "Rule not found")
+			return
+		}
+		if err != nil {
+			failure(w, 500, "Could not delete rule")
+			return
+		}
+		jsonResponse(w, map[string]bool{"ok": true})
+	})
 	// A flagged alert transaction can be dismissed, or restored.
 	mux.HandleFunc("POST /api/transactions/{id}/dismiss", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
@@ -59,6 +111,7 @@ func filter(r *http.Request) store.Filter {
 		Search:  q.Get("search"),
 		Account: q.Get("account"),
 		Status:  q.Get("status"),
+		Kind:    q.Get("kind"),
 		From:    q.Get("from"),
 		To:      q.Get("to"),
 		Offset:  offset,
@@ -95,7 +148,7 @@ func (s *Server) csv(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="ledger-transactions.csv"`)
 	writer := csv.NewWriter(w)
 	defer writer.Flush()
-	writer.Write([]string{"Date", "Issuer", "Account", "Account type", "Merchant", "Amount", "Currency", "Direction", "Status", "Reference"})
+	writer.Write([]string{"Date", "Issuer", "Account", "Account type", "Merchant", "Amount", "Currency", "Direction", "Status", "Reference", "Transfer"})
 	f := filter(r)
 	f.Offset = 0
 	for {
@@ -105,7 +158,7 @@ func (s *Server) csv(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, t := range rows {
 			record := []string{t.Date, t.Issuer, t.Account, t.AccountKind, t.Merchant, ledger.Decimal(t.Amount),
-				t.Currency, t.Direction, t.Status, t.Reference}
+				t.Currency, t.Direction, t.Status, t.Reference, t.Transfer}
 			for i := range record {
 				record[i] = csvSafe(record[i])
 			}
