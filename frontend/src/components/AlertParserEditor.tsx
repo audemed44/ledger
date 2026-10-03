@@ -151,7 +151,7 @@ export function AlertParserEditor({
           <div class="two-col">
             <Field
               label="Issuer / bank"
-              hint="Use the same issuer for all rules from this bank (for example, HDFC)."
+              hint="Use the name statements use, so they match: HDFC, ICICI, Axis, IDFC or SBI."
             >
               <input
                 value={parser.issuer || ""}
