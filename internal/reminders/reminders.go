@@ -24,6 +24,10 @@ import (
 // Overdue is the reminder step sent once the due date has passed.
 const Overdue = -1
 
+// Statement is the step for the notice sent when a new statement arrives;
+// outside the 0–30 days a day step can be.
+const Statement = 1000
+
 // overdueWindow is how many days after the due date the overdue reminder
 // may still go out, so old statements don't all remind at once.
 const overdueWindow = 3
@@ -37,8 +41,10 @@ type Notifier struct {
 	// URL is the Apprise endpoint; empty turns reminders off.
 	URL string
 	// Days are how many days before the due date to remind, e.g. 5, 1, 0.
-	Days   []int
-	Client *http.Client
+	Days []int
+	// OnStatement also sends a notice when a card's new statement arrives.
+	OnStatement bool
+	Client      *http.Client
 }
 
 // ParseDays reads LEDGER_REMINDER_DAYS: comma-separated days before the
@@ -113,6 +119,26 @@ func (n *Notifier) Check(ctx context.Context, now time.Time) error {
 			continue
 		}
 		step, ok := n.Step(d.Days)
+		if n.OnStatement && d.Days >= 0 {
+			sent, err := n.Store.ReminderSent(d.AccountID, d.DueDate, Statement)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			if !sent {
+				title, body := StatementMessage(d)
+				if err = n.Send(ctx, title, body, "info"); err != nil {
+					errs = append(errs, err)
+					continue
+				}
+				errs = append(errs, n.Store.MarkReminderSent(d.AccountID, d.DueDate, Statement, now))
+				// The notice says it all; a day step it falls in isn't sent too.
+				if ok {
+					errs = append(errs, n.Store.MarkReminderSent(d.AccountID, d.DueDate, step, now))
+				}
+				continue
+			}
+		}
 		if !ok {
 			continue
 		}
@@ -166,6 +192,20 @@ func Message(d store.Due) (string, string) {
 	}
 	if d.Paid > 0 {
 		lines = append(lines, Rupees(d.Paid)+" of "+Rupees(d.TotalDue)+" paid since the statement.")
+	}
+	return title, strings.Join(lines, " ")
+}
+
+// StatementMessage is the notice for a card's newly arrived statement.
+func StatementMessage(d store.Due) (string, string) {
+	title := fmt.Sprintf("%s card ••%s: new statement, %s due %s", d.Issuer, d.LastFour, Rupees(d.Remaining), When(d.Days))
+	due, _ := time.Parse("2006-01-02", d.DueDate)
+	lines := []string{"Statement total " + Rupees(d.TotalDue) + ", due " + due.Format("Mon 2 Jan") + "."}
+	if d.MinimumDue > 0 && d.MinimumDue < d.Remaining {
+		lines = append(lines, "Minimum "+Rupees(d.MinimumDue)+".")
+	}
+	if d.Paid > 0 {
+		lines = append(lines, Rupees(d.Paid)+" paid since the statement.")
 	}
 	return title, strings.Join(lines, " ")
 }

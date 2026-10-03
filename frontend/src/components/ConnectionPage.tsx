@@ -113,6 +113,10 @@ export function ConnectionPage({
                   <strong>{[...(reminders.days ?? [])].reverse().join(", ")}</strong>
                 </div>
                 <div>
+                  <span class="eyebrow">New statement</span>
+                  <strong>{reminders.on_statement ? "Notify when it arrives" : "Off"}</strong>
+                </div>
+                <div>
                   <span class="eyebrow">When overdue</span>
                   <strong>Once, the next day</strong>
                 </div>
@@ -134,6 +138,10 @@ export function ConnectionPage({
               <li>
                 Optionally set <code>LEDGER_REMINDER_DAYS</code> (default <code>5,1,0</code>).
                 Reminders go out from 9:00 in Ledger’s <code>TZ</code>.
+              </li>
+              <li>
+                Optionally set <code>LEDGER_REMINDER_ON_STATEMENT=true</code> to also be told when a
+                card’s new statement arrives.
               </li>
             </ol>
           </div>

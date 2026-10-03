@@ -104,3 +104,54 @@ func TestFailedSendsAreRetried(t *testing.T) {
 		t.Fatal("not recorded")
 	}
 }
+
+func TestNewStatementNoticeIsOptional(t *testing.T) {
+	s, _ := store.Open(t.TempDir())
+	defer s.Close()
+	st := statements.Statement{AccountID: ledger.AccountKey("Example Bank", "card", "4242"), AccountKind: "card",
+		Issuer: "Example Bank", Account: "4242", Date: "2026-09-20", DueDate: "2026-10-08", TotalDue: 1234500, MinimumDue: 61700}
+	raw, _ := json.Marshal(st)
+	s.DB.Exec("INSERT INTO statements(account_key,date,fingerprint,snapshot) VALUES(?,?,?,?)", st.AccountID, st.Date, "x", string(raw))
+	var titles []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]string
+		json.NewDecoder(r.Body).Decode(&body)
+		titles = append(titles, body["title"]+" | "+body["body"])
+	}))
+	defer srv.Close()
+	at := func(day, hour int) time.Time { return time.Date(2026, 10, day, hour, 0, 0, 0, time.Local) }
+
+	off := &Notifier{Store: s, URL: srv.URL, Days: []int{0, 1, 5}}
+	off.Check(context.Background(), at(1, 10))
+	if len(titles) != 0 {
+		t.Fatalf("notice without the option: %q", titles)
+	}
+
+	n := &Notifier{Store: s, URL: srv.URL, Days: []int{0, 1, 5}, OnStatement: true}
+	for _, now := range []time.Time{at(1, 8), at(1, 10), at(1, 15), at(7, 10)} {
+		if err := n.Check(context.Background(), now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(titles) != 2 || titles[0] != "Example Bank card ••4242: new statement, ₹12,345.00 due in 7 days | Statement total ₹12,345.00, due Thu 8 Oct. Minimum ₹617.00." ||
+		!strings.Contains(titles[1], "due tomorrow") {
+		t.Fatalf("%q", titles)
+	}
+
+	// A statement arriving inside a day step sends only the notice.
+	s.DB.Exec("DELETE FROM reminders")
+	titles = nil
+	n.Check(context.Background(), at(4, 10))
+	n.Check(context.Background(), at(4, 11))
+	if len(titles) != 1 || !strings.Contains(titles[0], "new statement") {
+		t.Fatalf("%q", titles)
+	}
+
+	// Past its due date, a statement gets no notice.
+	s.DB.Exec("DELETE FROM reminders")
+	titles = nil
+	n.Check(context.Background(), at(9, 10))
+	if len(titles) != 1 || strings.Contains(titles[0], "new statement") {
+		t.Fatalf("%q", titles)
+	}
+}
