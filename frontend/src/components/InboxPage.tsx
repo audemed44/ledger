@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { ArrowRight, Mail, RefreshCw, Upload } from "lucide-preact";
 import { api, upload } from "../api";
 import { dateLabel } from "../lib";
@@ -21,9 +21,15 @@ export function InboxPage({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState("");
+  // Background refreshes keep the list on screen, so the page doesn't jump;
+  // only a new filter starts from "Loading".
+  const shownKind = useRef(kind);
   useEffect(() => {
     let live = true;
-    setRows(null);
+    if (shownKind.current !== kind) {
+      shownKind.current = kind;
+      setRows(null);
+    }
     setError("");
     api<Message[]>(kind === "all" ? "messages" : `messages?kind=${kind}`)
       .then((rows) => {

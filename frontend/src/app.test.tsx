@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/preact";
 import { afterEach, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { TransactionsPage } from "./components/TransactionsPage";
 import { money } from "./lib";
 const summary = {
   totals: [],
@@ -76,4 +77,29 @@ it("shows an empty ledger rather than fabricated financial data", async () => {
 it("formats integer paise without dropping the fractional amount", () => {
   expect(money(123456, "INR")).toBe("₹1,234.56");
   expect(money(1, "INR")).toBe("₹0.01");
+});
+it("keeps the transactions on screen while the ledger refreshes", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+    reply([
+      {
+        id: 1,
+        message_id: 1,
+        merchant: "Example Shop",
+        account: "4242",
+        amount: 100,
+        currency: "INR",
+        direction: "debit",
+        date: "2026-10-01",
+        reference: "",
+        status: "provisional",
+        issuer: "Example",
+      },
+    ]),
+  );
+  const { rerender } = render(<TransactionsPage summary={summary} version={0} />);
+  await screen.findByText("Example Shop");
+  // A refresh bumps the version; the list must not blank out meanwhile.
+  rerender(<TransactionsPage summary={summary} version={1} />);
+  expect(screen.queryByText("Loading activity…")).toBeNull();
+  expect(screen.getByText("Example Shop")).toBeTruthy();
 });

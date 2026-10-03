@@ -113,7 +113,8 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
         </Field>
       </div>
       <ErrorNote error={error} />
-      {loading ? (
+      {/* Refreshes keep the rows on screen, so the page doesn't jump. */}
+      {loading && !rows.length ? (
         <div class="loading" role="status">
           Loading activity…
         </div>
