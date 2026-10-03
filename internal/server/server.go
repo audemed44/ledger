@@ -27,6 +27,8 @@ type Server struct {
 	Files         fs.FS
 	// Reminders sends card payment reminders; nil or without a URL, none.
 	Reminders *reminders.Notifier
+	// FoyerURL is Foyer, the homelab's start page, linked from the header.
+	FoyerURL string
 }
 
 const contentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +

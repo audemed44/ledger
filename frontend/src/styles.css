@@ -91,6 +91,29 @@ button {
   font-weight: 800;
   letter-spacing: -0.02em;
 }
+/* Back to Foyer, the homelab's start page. */
+.home-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 20px;
+  border-right: 1px solid var(--line);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--fg-3);
+}
+.home-link:hover {
+  color: var(--fg);
+}
+@media (max-width: 560px) {
+  .home-link {
+    padding-right: 10px;
+  }
+  .home-link-text {
+    display: none;
+  }
+}
 .brand-mark {
   display: inline-block;
   width: 19px;

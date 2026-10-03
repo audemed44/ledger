@@ -133,11 +133,13 @@ type Summary struct {
 	} `json:"reminders"`
 	Month string `json:"month"`
 	Demo  bool   `json:"demo"`
+	// FoyerURL is the homelab's start page, linked from the header.
+	FoyerURL string `json:"foyer_url,omitempty"`
 }
 
 // summary's month follows TZ.
 func (s *Server) summary() (Summary, error) {
-	out := Summary{Month: time.Now().Format("2006-01"), Demo: s.Demo}
+	out := Summary{Month: time.Now().Format("2006-01"), Demo: s.Demo, FoyerURL: s.FoyerURL}
 	var err error
 	if out.Counts, err = s.Store.Counts(); err != nil {
 		return out, err
