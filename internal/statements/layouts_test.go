@@ -125,3 +125,28 @@ func TestIDFCCreditCard(t *testing.T) {
 		"bad date":     layout(strings.Replace(text, "02 Oct 26", "32 Oct 26", 1)),
 	})
 }
+
+func TestSBISavings(t *testing.T) {
+	text := fixture.SBIStatement
+	check(t, "sbi-savings", layout(text), Statement{
+		Issuer: "SBI", AccountKind: "bank", Account: "4242", Date: "2026-10-31",
+		Opening: 1000000, TotalDue: 1224950,
+	}, []string{
+		"2026-10-02 +5000.00 UPI/CR/600000000001/EXAMPLE FRIEND/EXMP/friend@exam",
+		"2026-10-05 -2000.00 ATM WDL EXAMPLE TOWN",
+		"2026-10-20 -750.50 BY TRANSFER-INB EXAMPLE ELECTRICITY BOARD BILL PAYMENT",
+	})
+	s, _ := ParseWith("sbi-savings", layout(text))
+	if s.Transactions[1].Reference != "1234" || s.Transactions[0].Reference != "" {
+		t.Fatal("references", s.Transactions)
+	}
+	failsClosed(t, "sbi-savings", map[string]Text{
+		"missing row":     layout(strings.Replace(text, "   05-10-26       ATM WDL EXAMPLE TOWN                                                                    1234                    0          2000.00        13000.00\n", "", 1)),
+		"running balance": layout(strings.Replace(text, "2000.00        13000.00", "2000.00        13100.00", 1)),
+		"both columns":    layout(strings.Replace(text, "1234                    0          2000.00", "1234                    5.00       2000.00", 1)),
+		"closing":         layout(strings.Replace(text, "31-10-26:                 12249.50", "31-10-26:                 12200.50", 1)),
+		"two accounts":    layout(text + "TRANSACTION OVERVIEW\n"),
+		"no account":      layout(strings.Replace(text, " XXXXXXX4242\n       Name", "\n       Name", 1)),
+		"wrong layout":    layout(strings.ReplaceAll(text, "sbi.co.in", "example.in")),
+	})
+}

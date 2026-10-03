@@ -132,3 +132,35 @@ Payments & Other Credits
                Refer this Credit Card to                     Avail Quick Cash instantly
                your friends and earn up                      in your Bank Account with
 `
+
+// SBIStatement is an SBI savings account statement for account 4242:
+// 10,000.00 opening, 5,000.00 in and 2,750.50 out, 12,249.50 closing. One
+// row's details wrap onto the lines around it.
+const SBIStatement = `                                                                                                                          Welcome Mr. EXAMPLE PERSON
+                                                                                                 As on 31-10-26
+TRANSACTION ACCOUNTS
+  Holding                            Account Number Account Status              Current Balance
+      P                 SINGLE        XXXXXXX4242       OPEN              INR       12249.50                0.00                   0.00          12249.50
+FIXED DEPOSITS
+TERM DEPOSIT        XXXXXXX9999   01-10-25        10000.00       P             SINGLE     6.25         0.00             500.00               10600.00        01-10-26        Yes
+*All dates are in DD-MM-YY
+  Visit https://sbi.co.in             Customer Care Number : 1800 1234                        Customer Care Email : customercare@sbi.co.in             2 of 3
+TRANSACTION DETAILS
+ SAVING ACCOUNT
+ XXXXXXX4242
+       Name of the Account Holder                                                          Mr. EXAMPLE PERSON
+       Available Balance                                                                   12249.50
+TRANSACTION OVERVIEW
+     Date                           Transaction Reference                            Ref.No./Chq.No.                 Credit              Debit          Balance
+Yournull
+     Opening null
+             Balance on 01-10-26:                  10000.00                                              null                 null               null             null
+   02-10-26       UPI/CR/600000000001/EXAMPLE FRIEND/EXMP/friend@exam                                       -           5000.00                    0       15000.00
+   05-10-26       ATM WDL EXAMPLE TOWN                                                                    1234                    0          2000.00        13000.00
+                  BY TRANSFER-INB EXAMPLE ELECTRICITY
+   20-10-26                                                                                    IB0000000001                    0           750.50        12249.50
+                  BOARD BILL PAYMENT
+Your Closing Balance on 31-10-26:                 12249.50
+*All dates are in DD-MM-YY format
+  Visit https://sbi.co.in             Customer Care Number : 1800 1234                           Customer Care Email : customercare@sbi.co.in           3 of 3
+`
