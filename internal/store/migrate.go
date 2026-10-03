@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"github.com/audemed44/ledger/internal/mail"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +39,7 @@ func (s *Store) migrate() error {
 		s.mergeDuplicateStatementParsers,
 		s.retireBeforeBackfill,
 		s.recoverArchivedText,
+		s.recoverSenders,
 	} {
 		if err := step(); err != nil {
 			return err
@@ -187,4 +189,31 @@ func (s *Store) recoverArchivedText() error {
 		return err
 	}
 	return s.SetSetting("mail-text-version", version)
+}
+
+// recoverSenders re-reads the sender of mail stored without one, once:
+// older versions couldn't read a From header with an empty encoded name.
+// A missing archive leaves the sender blank.
+func (s *Store) recoverSenders() error {
+	const version = "1"
+	saved, err := s.Setting("sender-recovery")
+	if err != nil || saved == version {
+		return err
+	}
+	ids, err := s.queuedIDs("SELECT id FROM messages WHERE sender='' AND id>? ORDER BY id", 0)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		raw, e := s.ArchivedRaw(id)
+		if e != nil {
+			continue
+		}
+		if sender := mail.Decode(raw).Sender; sender != "" {
+			if _, err = s.DB.Exec("UPDATE messages SET sender=? WHERE id=?", sender, id); err != nil {
+				return err
+			}
+		}
+	}
+	return s.SetSetting("sender-recovery", version)
 }

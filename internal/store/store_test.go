@@ -797,3 +797,28 @@ func TestPDFPreviewWithPasswordSlots(t *testing.T) {
 		t.Fatal("accepted non-PDF MIME part")
 	}
 }
+
+func TestSenderRecoveredOnOpen(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SaveParser(fixture.AlertParser())
+	raw := strings.Replace(string(fixture.Mail("blank-name", fixture.AlertBody)), "From: Example <alerts@example.invalid>", "From: =?UTF-8?B??= <alerts@example.invalid>", 1)
+	id, _ := s.Ingest([]byte(raw))
+	// As an older version stored it: no sender, so no parser matched.
+	s.DB.Exec("UPDATE messages SET sender='' WHERE id=?; DELETE FROM transactions; UPDATE messages SET state='queued'; DELETE FROM settings WHERE key='sender-recovery'", id)
+	s.Close()
+	if s, err = Open(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if m, _ := s.Message(id); m.Sender != "alerts@example.invalid" {
+		t.Fatalf("%q", m.Sender)
+	}
+	s.Reprocess()
+	if rows, _ := s.Transactions(Filter{}); len(rows) != 1 {
+		t.Fatal("recovered alert not parsed")
+	}
+}

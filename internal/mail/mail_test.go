@@ -29,3 +29,13 @@ func TestOversizedTextRemainsQueued(t *testing.T) {
 		t.Fatal("oversized text accepted")
 	}
 }
+
+func TestSenderWithEmptyEncodedName(t *testing.T) {
+	m := Decode([]byte("From: =?UTF-8?B??= <noreply@example.invalid>\r\nSubject: Alert\r\n\r\nINR 1.00"))
+	if m.Sender != "noreply@example.invalid" {
+		t.Fatalf("%q", m.Sender)
+	}
+	if m = Decode([]byte("From: =?UTF-8?B??= <a@example.invalid>, <b@example.invalid>\r\n\r\nx")); m.Sender != "" {
+		t.Fatal("ambiguous sender accepted", m.Sender)
+	}
+}
