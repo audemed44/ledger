@@ -113,6 +113,11 @@ var Adapters = []Adapter{{
 	Name:        "ICICI Credit Card Parser v1",
 	Description: "ICICI Bank credit card summary, with lines read from the PDF's raw text",
 	parse:       parseICICI,
+}, {
+	ID:          "idfc-credit-card",
+	Name:        "IDFC FIRST Credit Card Parser v1",
+	Description: "IDFC FIRST Bank credit card summary and DR/CR transaction lines",
+	parse:       parseIDFC,
 }}
 
 // adapter finds a layout by ID.

@@ -128,6 +128,7 @@ refuses a statement with a second card or account in it.
 | **HDFC Credit Card Parser v1** (`hdfc-credit-card`) | HDFC, card | Summary and dated table. Works on the Tata Neu and Regalia layouts; the ₹ glyph extracts as `C` |
 | **Axis Credit Card Parser v1** (`axis-credit-card`) | Axis, card | Previous balance, payments, credits, purchases, cash and other charges against the Dr/Cr lines |
 | **ICICI Credit Card Parser v1** (`icici-credit-card`) | ICICI, card | Summary from the page layout; lines from the PDF's raw text, because the layout text loses their amounts |
+| **IDFC FIRST Credit Card Parser v1** (`idfc-credit-card`) | IDFC, card | Opening balance, purchases, EMI and other debits, payments and refunds; balances in credit are supported. ₹ extracts as `r` |
 
 Descriptions that wrap onto the lines around their row are joined back
 together. For alerts and statements to reconcile, give alert parsers the

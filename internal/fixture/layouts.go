@@ -93,3 +93,42 @@ Statement period : September 13, 2026 to October 12, 2026
 Page 1 of 3
 `,
 }
+
+// IDFCStatement is an IDFC FIRST Bank credit card statement for card 4242,
+// in credit before and after: -50.00 + 1,500.00 + 30.00 - 1,500.00 =
+// 20.00 CR. The payment's details wrap onto the lines around it.
+const IDFCStatement = `                                                                                                                                                   Credit Card Statement
+                                                                                                                                                            25/Sep/2026 - 24/Oct/2026
+                                                                                                                                            EXAMPLE PERSON
+Statement Summary                                                                                                                                Need help? Check out our FAQs
+(FIRST Select XX4242)
+      Total Amount Due                          Minimum Amount Due                       Credit Limit                   Payment Due Date                Statement Period
+      r20.00 CR                                  r0.00                                    r50,000                        08/Nov/2026                25/Sep/2026 - 24/Oct/2026
+                                                                                                    Rewards Summary
+          Opening Balance                                                    r50.00 CR
+                                                                                                    Opening Balance                                                        10
+          Purchases                                   +                      r1,500.00
+                                                                                                    Earned this Month                               +                   30
+          EMI & Other Debits                          +                          r30.00
+          Payments & Refunds                          -                      r1,500.00
+          Total Amount Due                            =                      r20.00 CR
+      Pay via our new Mobile App, or at IDFC FIRST Bank branches.
+                                                                                                                    Credit Card Statement
+                                                                                                                          25/Sep/2026 - 24/Oct/2026
+YOUR CARD INFORMATION
+Statement Date:          Relationship No.         CKYC :
+24/Oct/2026              1000000001               XXXXXXXXXX0001
+YOUR TRANSACTIONS
+Transaction                        Transaction Details                      EMI                   FX                               Amount
+Date                                                                        Eligibility           Transactions                     (In INR)
+Card Number: XXXX 4242
+Purchases, EMIs & Other Debits
+02 Oct 26                          EXAMPLE KITCHEN, PUNE                     Convert                                              1,500.00 DR
+10 Oct 26                          LATE FEE REVERSAL ADJ GST                                                                         30.00 DR
+Payments & Other Credits
+                                   BBPS CC
+20 Oct 26                                                                                                                         1,500.00 CR
+                                   Payment/EXAMPLE0000001
+               Refer this Credit Card to                     Avail Quick Cash instantly
+               your friends and earn up                      in your Bank Account with
+`
