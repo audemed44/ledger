@@ -20,8 +20,25 @@ wins.
 
 ## Alert parsers
 
-An alert parser matches one **exact sender** and a **subject** regex, then
-runs a **body** regex (Go syntax) with named groups:
+Open an email in the inbox and choose **Create alert parser**. Select a
+value in the email text, then choose what it is: **Amount**, **Merchant**,
+**Card / account** (just the last four digits) and **Date** are required;
+**Currency** (a code such as INR) and **Reference** are optional. Ledger
+writes the body pattern, the date layout and a subject pattern from them,
+and the preview shows the transaction it reads. You can also paste a
+sample instead of opening an email.
+
+The pattern keeps a few words of literal text around each value, so it
+still matches the next email: numbers and month names in that text may
+change, and a long stretch between two values is skipped. The pattern must
+read back exactly what you tagged, or Ledger says what went wrong; usually
+the fix is selecting the whole value, or tagging values that are closer
+together. Numeric dates are read day first (01/10/2026 is 1 October)
+unless the year comes first or the middle number can't be a month.
+
+Under **Advanced** you can edit the pattern and layout by hand. An alert
+parser matches one **exact sender** and a **subject** regex, then runs a
+**body** regex (Go syntax) with named groups:
 
 | Group | | |
 | --- | --- | --- |

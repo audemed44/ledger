@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { ArrowRight, Check, SlidersHorizontal } from "lucide-preact";
+import { ArrowRight, Check, Pencil, SlidersHorizontal } from "lucide-preact";
 import { api } from "../api";
-import { dateLabel, money, samplePattern } from "../lib";
-import type { Message, Parser, Preview } from "../types";
+import { dateLabel, money, syntheticAlert } from "../lib";
+import type { Example, Mark, Message, Parser, Preview } from "../types";
+import { ExampleTagger, missingFields } from "./ExampleTagger";
 import { ErrorNote, Field } from "./ui";
 
 export function AlertParserEditor({
@@ -24,7 +25,14 @@ export function AlertParserEditor({
     [previewError, setPreviewError] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [savedID, setSavedID] = useState(0);
+    [savedID, setSavedID] = useState(0),
+    [marks, setMarks] = useState<Mark[]>([]),
+    [exampleError, setExampleError] = useState(""),
+    [writingSample, setWritingSample] = useState(!message && !initial.pattern),
+    [advanced, setAdvanced] = useState(!!initial.pattern);
+  // The subject pattern last written from the example; one the user typed
+  // isn't replaced.
+  const writtenSubject = useRef("");
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     dialog.current?.showModal();
@@ -57,6 +65,34 @@ export function AlertParserEditor({
       clearTimeout(timer);
     };
   }, [input]);
+  // Tagging every required field writes the body pattern and date layout.
+  useEffect(() => {
+    setExampleError("");
+    if (!marks.length || missingFields(marks).length) return;
+    let live = true;
+    api<Example>("parsers/from-example", { subject, body, marks })
+      .then((e) => {
+        if (!live) return;
+        setParser((p) => {
+          const keepSubject = p.subject && p.subject !== writtenSubject.current;
+          writtenSubject.current = keepSubject ? writtenSubject.current : e.subject;
+          return {
+            ...p,
+            pattern: e.pattern,
+            date_layout: e.date_layout || p.date_layout,
+            subject: keepSubject ? p.subject : e.subject,
+          };
+        });
+        setSavedID(0);
+      })
+      .catch((e) => {
+        if (live) setExampleError(e.message);
+      });
+    return () => {
+      live = false;
+    };
+  }, [JSON.stringify(marks), body, subject]);
+  const missing = missingFields(marks);
   function update<K extends keyof Parser>(key: K, value: Parser[K]) {
     setParser((p) => ({ ...p, [key]: value }));
     setSavedID(0);
@@ -136,7 +172,7 @@ export function AlertParserEditor({
           </div>
           <Field
             label="Subject pattern"
-            hint="Go regular expression; leave blank to match any subject."
+            hint="Filled in from the example; numbers and months may change. Blank matches any subject."
           >
             <input
               class="mono"
@@ -145,54 +181,14 @@ export function AlertParserEditor({
               placeholder="(?i)purchase alert"
             />
           </Field>
-          <Field
-            label="Body pattern"
-            hint="Required named groups: amount, merchant, account (last 4), date. Optional: currency, direction, reference."
-          >
-            <textarea
-              class="mono pattern"
-              value={parser.pattern}
-              onInput={(e) => update("pattern", e.currentTarget.value)}
-              spellcheck={false}
-              placeholder="(?P<amount>...)"
-            />
-          </Field>
-          <button
-            class="text-link"
-            onClick={() => {
-              update("pattern", samplePattern);
-              if (!message) {
-                setBody(
-                  "Amount: INR 1290.00\nMerchant: Example Store\nCard: 4242\nDate: 2026-10-01\nReference: EXAMPLE-001\n",
-                );
-                setSender("alerts@example.invalid");
-                setSubject("Purchase alert");
-                setParser((p) => ({
-                  ...p,
-                  name: p.name || "Example Bank",
-                  sender: "alerts@example.invalid",
-                  subject: "^Purchase alert$",
-                }));
-              }
-            }}
-          >
-            Use synthetic example <ArrowRight size={13} />
-          </button>
           <div class="two-col">
-            <Field label="Date layout" hint="Go layout: 02-Jan-2006 or 2006-01-02">
-              <input
-                class="mono"
-                value={parser.date_layout}
-                onInput={(e) => update("date_layout", e.currentTarget.value)}
-              />
-            </Field>
             <Field label="Timezone">
               <input
                 value={parser.timezone}
                 onInput={(e) => update("timezone", e.currentTarget.value)}
               />
             </Field>
-            <Field label="Default currency">
+            <Field label="Default currency" hint="Used unless you tag a currency code.">
               <select
                 value={parser.currency}
                 onChange={(e) => update("currency", e.currentTarget.value)}
@@ -213,6 +209,35 @@ export function AlertParserEditor({
               </select>
             </Field>
           </div>
+          <details
+            class="advanced"
+            open={advanced}
+            onToggle={(e) => setAdvanced(e.currentTarget.open)}
+          >
+            <summary>Advanced: pattern and date layout</summary>
+            <Field
+              label="Body pattern"
+              hint="Written from your tags. A Go regular expression with named groups amount, merchant, account (last 4) and date; optionally currency, direction and reference."
+            >
+              <textarea
+                class="mono pattern"
+                value={parser.pattern}
+                onInput={(e) => update("pattern", e.currentTarget.value)}
+                spellcheck={false}
+                placeholder="(?P<amount>...)"
+              />
+            </Field>
+            <Field
+              label="Date layout"
+              hint="Go layout, worked out from the tagged date: 2-Jan-2006, 2006-1-2"
+            >
+              <input
+                class="mono"
+                value={parser.date_layout}
+                onInput={(e) => update("date_layout", e.currentTarget.value)}
+              />
+            </Field>
+          </details>
           <label class="check">
             <input
               type="checkbox"
@@ -242,20 +267,67 @@ export function AlertParserEditor({
               <p class="hint">{message.sender}</p>
             </div>
           )}
-          <Field label="Email text">
-            <textarea
-              class="mono sample"
-              value={body}
-              readOnly={!!message}
-              onInput={(e) => setBody(e.currentTarget.value)}
-              spellcheck={false}
-              placeholder={
-                message
-                  ? "No readable text was extracted from this email."
-                  : "Use the synthetic example, or open a message from the queue."
-              }
-            />
-          </Field>
+          {writingSample ? (
+            <>
+              <Field label="Sample email text">
+                <textarea
+                  class="mono sample"
+                  value={body}
+                  onInput={(e) => {
+                    setBody(e.currentTarget.value);
+                    setMarks([]);
+                  }}
+                  spellcheck={false}
+                  placeholder="Paste the text of an alert email, or use the synthetic example."
+                />
+              </Field>
+              <div class="actions">
+                <button class="btn" disabled={!body.trim()} onClick={() => setWritingSample(false)}>
+                  Tag fields in this text <ArrowRight size={13} />
+                </button>
+                <button
+                  class="text-link"
+                  onClick={() => {
+                    setBody(syntheticAlert.body);
+                    setSender(syntheticAlert.sender);
+                    setSubject(syntheticAlert.subject);
+                    setMarks([]);
+                    setWritingSample(false);
+                    setParser((p) => ({
+                      ...p,
+                      name: p.name || "Example Bank",
+                      sender: syntheticAlert.sender,
+                    }));
+                  }}
+                >
+                  Use synthetic example <ArrowRight size={13} />
+                </button>
+              </div>
+            </>
+          ) : body ? (
+            <>
+              <ExampleTagger body={body} marks={marks} setMarks={setMarks} />
+              {!message && (
+                <button class="text-link" onClick={() => setWritingSample(true)}>
+                  <Pencil size={13} /> Change the sample text
+                </button>
+              )}
+              {exampleError ? (
+                <p class="error-text" role="alert">
+                  {exampleError}
+                </p>
+              ) : (
+                marks.length > 0 &&
+                missing.length > 0 && (
+                  <p class="hint">Still to tag: {missing.map((f) => f.label).join(", ")}.</p>
+                )
+              )}
+            </>
+          ) : (
+            <p class="muted">
+              No readable text was extracted from this email, so there is nothing to tag.
+            </p>
+          )}
           <div class="preview">
             <div class="eyebrow">EXTRACTED TRANSACTION</div>
             {previewError ? (
@@ -290,7 +362,7 @@ export function AlertParserEditor({
                   ? "This alert will be ignored and retained in the archive."
                   : preview && !preview.matched
                     ? "No match. Check the sender, subject and body pattern."
-                    : "Your preview will appear here as you edit."}
+                    : "Tag the amount, merchant, card and date to see the transaction."}
               </p>
             )}
           </div>

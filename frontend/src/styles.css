@@ -1123,3 +1123,117 @@ footer a {
     grid-template-columns: 1fr;
   }
 }
+
+/* Building an alert parser from tagged example text. */
+.tagger {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.tag-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.tag-button {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--tag);
+  min-width: 0;
+}
+.tag-button > button:first-child {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 10px;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+}
+.tag-button > button:first-child:disabled {
+  cursor: default;
+}
+.tag-button > button:first-child:not(:disabled):hover {
+  background: rgb(255 255 255 / 0.05);
+}
+.tag-button .icon-btn {
+  width: 30px;
+  height: auto;
+  border: 0;
+}
+.tag-value {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag-button.tagged .tag-value {
+  color: var(--fg);
+}
+.tag-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.7;
+  padding: 14px;
+  border: 1px solid var(--line);
+  max-height: 340px;
+  overflow-y: auto;
+  user-select: text;
+}
+.tag-text mark {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--tag) 30%, transparent);
+  box-shadow: inset 0 -2px 0 var(--tag);
+}
+.tag-amount {
+  --tag: #2563ff;
+}
+.tag-merchant {
+  --tag: #86bb9c;
+}
+.tag-account {
+  --tag: #d9a35b;
+}
+.tag-date {
+  --tag: #b48ae6;
+}
+.tag-currency {
+  --tag: #6fc3cf;
+}
+.tag-reference {
+  --tag: #9a9a9a;
+}
+.advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.advanced summary {
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+.advanced[open] summary {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 680px) {
+  .tag-buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tag-text {
+    max-height: 260px;
+  }
+}

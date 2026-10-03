@@ -1,6 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/preact";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { AlertParserEditor } from "./components/AlertParserEditor";
 import { MessageReview } from "./components/MessageReview";
+import { blankParser } from "./lib";
 import { App } from "./App";
 import type { Message } from "./types";
 const message: Message = {
@@ -72,7 +74,70 @@ it("opens readable email text before parser settings, including HTML-only mail",
   expect(screen.getByText(/Text extracted from HTML/)).toBeTruthy();
   fireEvent.click(await screen.findByRole("button", { name: "Create alert parser" }));
   await screen.findByText("Teach your ledger.");
-  expect((screen.getByLabelText("Email text") as HTMLTextAreaElement).value).toBe(message.body);
+  expect(screen.getByLabelText("Email text").textContent).toBe(message.body);
+});
+
+// select highlights text inside the example, as a user would.
+function select(container: HTMLElement, text: string) {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode() as Text;
+  while (!node.data.includes(text)) node = walker.nextNode() as Text;
+  const start = node.data.indexOf(text);
+  const range = document.createRange();
+  range.setStart(node, start);
+  range.setEnd(node, start + text.length);
+  document.getSelection()!.removeAllRanges();
+  document.getSelection()!.addRange(range);
+  document.dispatchEvent(new Event("selectionchange"));
+}
+
+it("builds an alert parser from text selected in the email", async () => {
+  let request: any;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
+    if (url === "/api/parsers/from-example") {
+      request = JSON.parse(options?.body as string);
+      return reply({ pattern: "GENERATED", date_layout: "2-Jan-06", subject: "(?i)^Example$" });
+    }
+    if (url === "/api/parsers/preview") return reply({ matched: false, ignored: false });
+    throw Error(`Unexpected URL: ${url}`);
+  });
+  const body = "Rs. 123.45 at Example Shop on card 4242 on 01-Oct-26.";
+  render(
+    <AlertParserEditor
+      initial={{ ...blankParser }}
+      message={{ ...message, body }}
+      close={() => {}}
+      saved={() => {}}
+    />,
+  );
+  const text = screen.getByLabelText("Email text");
+  for (const [label, value] of [
+    ["Amount", " 123.45 "],
+    ["Merchant", "Example Shop"],
+    ["Card / account", "4242"],
+  ]) {
+    await act(async () => select(text, value));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^" + label) }));
+  }
+  expect(screen.getByText(/Still to tag: Date/)).toBeTruthy();
+  expect(text.querySelectorAll("mark")).toHaveLength(3);
+  await act(async () => select(text, "01-Oct-26"));
+  fireEvent.click(screen.getByRole("button", { name: /^Date/ }));
+  await waitFor(() => expect(request).toBeTruthy());
+  expect(request.marks).toEqual([
+    { field: "amount", start: 4, end: 10 },
+    { field: "merchant", start: 14, end: 26 },
+    { field: "account", start: 35, end: 39 },
+    { field: "date", start: 43, end: 52 },
+  ]);
+  fireEvent.click(screen.getByText(/Advanced/));
+  await waitFor(() =>
+    expect((screen.getByLabelText(/Body pattern/) as HTMLTextAreaElement).value).toBe("GENERATED"),
+  );
+  expect((screen.getByLabelText(/Date layout/) as HTMLInputElement).value).toBe("2-Jan-06");
+  expect((screen.getByLabelText(/Subject pattern/) as HTMLInputElement).value).toBe(
+    "(?i)^Example$",
+  );
 });
 it("renders hostile text inertly and shows an honest missing-content error", () => {
   render(

@@ -79,6 +79,23 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 		}
 		jsonResponse(w, result)
 	})
+	// From-example writes a body pattern and date layout from tagged text.
+	mux.HandleFunc("POST /api/parsers/from-example", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Subject string        `json:"subject"`
+			Body    string        `json:"body"`
+			Marks   []alerts.Mark `json:"marks"`
+		}
+		if !decode(w, r, &body) {
+			return
+		}
+		example, err := alerts.FromExample(body.Subject, body.Body, body.Marks)
+		if err != nil {
+			failure(w, 422, err.Error())
+			return
+		}
+		jsonResponse(w, example)
+	})
 	mux.HandleFunc("GET /api/parsers.yaml", func(w http.ResponseWriter, r *http.Request) {
 		p, err := s.Store.Parsers()
 		if err != nil {

@@ -71,6 +71,8 @@ export type StatementParser = {
   adapter: string;
   password_slot: number;
 };
+export type Mark = { field: string; start: number; end: number };
+export type Example = { pattern: string; date_layout?: string; subject: string };
 export type PDFConfig = {
   password_slots: number[];
   adapters: { id: string; name: string; description: string }[];
