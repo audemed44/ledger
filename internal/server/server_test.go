@@ -229,7 +229,7 @@ func testStore(t *testing.T) *store.Store {
 
 func TestSummaryShape(t *testing.T) {
 	s := testStore(t)
-	h := (&Server{Store: s, Token: "1234"}).Handler()
+	h := (&Server{Store: s, Token: "1234", FoyerURL: "https://home.example"}).Handler()
 	r := httptest.NewRequest("GET", "/api/summary", nil)
 	r.Header.Set("Authorization", "Bearer 1234")
 	w := httptest.NewRecorder()
@@ -239,7 +239,7 @@ func TestSummaryShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The frontend reads these top-level fields; empty lists must be [], not null.
-	for _, key := range []string{"totals", "accounts", "transactions", "queued", "parsers", "month", "demo"} {
+	for _, key := range []string{"totals", "accounts", "transactions", "queued", "parsers", "month", "demo", "foyer_url"} {
 		if _, ok := got[key]; !ok {
 			t.Errorf("missing %s: %s", key, w.Body.String())
 		}

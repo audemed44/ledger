@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { ArrowUpRight, Download, LogOut, Plus } from "lucide-preact";
+import { ArrowLeft, ArrowUpRight, Download, LogOut, Plus } from "lucide-preact";
 import { api } from "./api";
 import { AlertParserEditor } from "./components/AlertParserEditor";
 import { AlertParsers } from "./components/AlertParsers";
@@ -115,6 +115,12 @@ export function App() {
   return (
     <div class="shell">
       <header class="topbar">
+        {summary.foyer_url && (
+          <a class="home-link" href={summary.foyer_url} title="Back to Foyer">
+            <ArrowLeft size={14} />
+            <span class="home-link-text">FOYER</span>
+          </a>
+        )}
         <a class="brand" href="#transactions">
           <span class="brand-mark" />
           LEDGER<span class="brand-sub">PERSONAL FINANCE</span>

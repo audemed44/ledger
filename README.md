@@ -83,6 +83,7 @@ they belong together.
 | `LEDGER_BACKFILL` | `false` | Import mail already under the label (see below) |
 | `LEDGER_PDF_PASSWORDS` | empty | Statement passwords, separated by `\|` |
 | `LEDGER_NOTIFY_URL` | empty | Apprise endpoint for payment reminders, e.g. `http://lookout:8080/notify/ledger`; off when empty |
+| `HOMEPAGE_URL` | empty | Foyer's address, for a link back to it in the header |
 | `LEDGER_REMINDER_DAYS` | `5,1,0` | Days before a card's due date to remind; reminders start at 9:00 |
 | `LEDGER_FETCH_STATEMENT_LINKS` | `true` | Download HDFC Bank statements from the SmartStatement link in their emails |
 | `LEDGER_SECURE_COOKIES` | `true` | |

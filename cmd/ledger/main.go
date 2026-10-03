@@ -100,6 +100,7 @@ func main() {
 		Store:         db,
 		Poller:        poller,
 		Token:         token,
+		FoyerURL:      foyerURL(),
 		SecureCookies: env("LEDGER_SECURE_COOKIES", "true") == "true",
 		Demo:          *demo,
 		Files:         dist,
@@ -205,4 +206,15 @@ func checkStatement(args []string) int {
 		return 2
 	}
 	return 0
+}
+
+// foyerURL is HOMEPAGE_URL, the link back to Foyer in the header, when
+// it's an http(s) address.
+func foyerURL() string {
+	u := os.Getenv("HOMEPAGE_URL")
+	if u != "" && !strings.HasPrefix(u, "https://") && !strings.HasPrefix(u, "http://") {
+		slog.Warn("HOMEPAGE_URL isn't an http(s) address; ignoring it", "url", u)
+		return ""
+	}
+	return u
 }

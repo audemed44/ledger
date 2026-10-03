@@ -51,6 +51,8 @@ export type Message = {
   content_error?: string;
 };
 export type Summary = {
+  /** Foyer, the homelab's start page (HOMEPAGE_URL). */
+  foyer_url?: string;
   totals: { currency: string; debit: number; credit: number }[];
   accounts: { id: string; issuer: string; kind: string; last_four: string }[];
   transactions: number;
