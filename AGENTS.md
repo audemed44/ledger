@@ -57,7 +57,7 @@ Conventional Commits: `<type>(<scope>): <summary>`, e.g. `feat(alerts): ...`.
 ## Checks before pushing
 
 ```sh
-go vet ./... && go test -race ./...        # needs web/dist, qpdf and pdftotext
+test -z "$(gofmt -l .)" && go vet ./... && go test -race ./...   # needs web/dist, qpdf and pdftotext
 cd frontend && npm run format:check && npm run typecheck && npm test && npm run build
 docker build -t ledger:dev .
 ```
