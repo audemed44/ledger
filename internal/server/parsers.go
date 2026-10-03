@@ -8,6 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/audemed44/ledger/internal/alerts"
+	"github.com/audemed44/ledger/internal/store"
 )
 
 func (s *Server) parserRoutes(mux *http.ServeMux) {
@@ -95,6 +96,47 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 			return
 		}
 		jsonResponse(w, example)
+	})
+	// Debit card links: saving or removing one retries the backlog, so
+	// alerts waiting for a link are recorded.
+	mux.HandleFunc("GET /api/card-links", func(w http.ResponseWriter, r *http.Request) {
+		links, err := s.Store.CardLinks()
+		if err != nil {
+			failure(w, 500, "Could not load debit cards")
+			return
+		}
+		jsonResponse(w, links)
+	})
+	mux.HandleFunc("POST /api/card-links", func(w http.ResponseWriter, r *http.Request) {
+		var l store.CardLink
+		if !decode(w, r, &l) {
+			return
+		}
+		if err := s.Store.SaveCardLink(l); err != nil {
+			failure(w, 400, err.Error())
+			return
+		}
+		if _, err := s.Store.Reprocess(); err != nil {
+			failure(w, 500, "Link saved, but retrying the backlog stopped")
+			return
+		}
+		jsonResponse(w, map[string]bool{"ok": true})
+	})
+	mux.HandleFunc("DELETE /api/card-links", func(w http.ResponseWriter, r *http.Request) {
+		var l store.CardLink
+		if !decode(w, r, &l) {
+			return
+		}
+		err := s.Store.DeleteCardLink(l.Issuer, l.Card)
+		if errors.Is(err, sql.ErrNoRows) {
+			failure(w, 404, "Debit card not found")
+			return
+		}
+		if err != nil {
+			failure(w, 500, "Could not remove debit card")
+			return
+		}
+		jsonResponse(w, map[string]bool{"ok": true})
 	})
 	mux.HandleFunc("GET /api/parsers.yaml", func(w http.ResponseWriter, r *http.Request) {
 		p, err := s.Store.Parsers()

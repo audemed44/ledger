@@ -44,9 +44,9 @@ func (p Parser) Validate() error {
 		return errors.New("invalid issuer")
 	}
 	switch p.AccountKind {
-	case "", "unknown", "card", "bank":
+	case "", "unknown", "card", "bank", "debit":
 	default:
-		return errors.New("account type must be card or bank")
+		return errors.New("account type must be card, bank or debit card")
 	}
 	if strings.TrimSpace(p.Name) == "" || len(p.Name) > 100 || !strings.Contains(p.Sender, "@") {
 		return errors.New("issuer name and exact sender email are required")

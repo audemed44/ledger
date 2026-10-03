@@ -4,6 +4,7 @@ import { api } from "./api";
 import { AlertParserEditor } from "./components/AlertParserEditor";
 import { AlertParsers } from "./components/AlertParsers";
 import { ConnectionPage } from "./components/ConnectionPage";
+import { DebitCards } from "./components/DebitCards";
 import { InboxPage } from "./components/InboxPage";
 import { Login } from "./components/Login";
 import { MessageReview } from "./components/MessageReview";
@@ -240,6 +241,7 @@ export function App() {
           <>
             <AlertParsers version={version} edit={(p) => setEditing({ parser: p })} />
             <StatementParsers />
+            <DebitCards saved={refresh} />
           </>
         )}
         {page === "connection" && <ConnectionPage sync={sync} busy={busy} syncNow={syncNow} />}
