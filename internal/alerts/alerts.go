@@ -31,6 +31,33 @@ type Parser struct {
 	// ("Payment received"); a statement line that confirms the
 	// transaction replaces it.
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	// Wordings are other ways the bank words the same alert, each with its
+	// own body pattern; an email must match exactly one wording.
+	Wordings []Wording `json:"wordings,omitempty" yaml:"wordings,omitempty"`
+}
+
+// Wording is one way an alert is worded: a body pattern, its date layout,
+// and (when it differs from the parser's) the account type.
+type Wording struct {
+	Pattern     string `json:"pattern"`
+	DateLayout  string `json:"date_layout" yaml:"date_layout"`
+	AccountKind string `json:"account_kind,omitempty" yaml:"account_kind,omitempty"`
+}
+
+// MaxWordings bounds the extra wordings of one parser.
+const MaxWordings = 20
+
+// All is the parser's main wording followed by its extra ones, each with
+// its account type filled in.
+func (p Parser) All() []Wording {
+	out := []Wording{{Pattern: p.Pattern, DateLayout: p.DateLayout, AccountKind: p.AccountKind}}
+	for _, w := range p.Wordings {
+		if w.AccountKind == "" {
+			w.AccountKind = p.AccountKind
+		}
+		out = append(out, w)
+	}
+	return out
 }
 
 // Preview is what a parser makes of one email.
@@ -47,42 +74,61 @@ func (p Parser) Validate() error {
 	if len(p.Issuer) > 100 || strings.ContainsRune(p.Issuer, 0) {
 		return errors.New("invalid issuer")
 	}
-	switch p.AccountKind {
-	case "", "unknown", "card", "bank", "debit":
-	default:
-		return errors.New("account type must be card, bank or debit card")
-	}
 	if strings.TrimSpace(p.Name) == "" || len(p.Name) > 100 || !strings.Contains(p.Sender, "@") {
 		return errors.New("issuer name and exact sender email are required")
 	}
-	if len(p.Pattern) > 16000 || len(p.Subject) > 2000 || len(p.Description) > 100 {
+	if len(p.Subject) > 2000 || len(p.Description) > 100 {
 		return errors.New("pattern too long")
 	}
 	if _, err := regexp.Compile(p.Subject); err != nil {
 		return fmt.Errorf("subject pattern: %w", err)
 	}
-	re, err := regexp.Compile(p.Pattern)
-	if err != nil {
-		return fmt.Errorf("body pattern: %w", err)
-	}
-	if _, err = time.LoadLocation(p.Timezone); err != nil {
+	if _, err := time.LoadLocation(p.Timezone); err != nil {
 		return errors.New("use an IANA timezone such as Asia/Kolkata")
 	}
 	if p.Direction != "debit" && p.Direction != "credit" && p.Direction != "ignore" {
 		return errors.New("direction must be debit, credit or ignore")
+	}
+	if p.Direction != "ignore" && !ledger.Currencies[p.Currency] {
+		return errors.New("select a supported two-decimal currency")
+	}
+	if len(p.Wordings) > MaxWordings {
+		return fmt.Errorf("at most %d extra wordings", MaxWordings)
+	}
+	for i, w := range p.All() {
+		if err := p.validateWording(w); err != nil {
+			if i > 0 {
+				return fmt.Errorf("wording %d: %w", i+1, err)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// validateWording checks one wording's pattern, layout and account type.
+func (p Parser) validateWording(w Wording) error {
+	switch w.AccountKind {
+	case "", "unknown", "card", "bank", "debit":
+	default:
+		return errors.New("account type must be card, bank or debit card")
+	}
+	if len(w.Pattern) > 16000 {
+		return errors.New("pattern too long")
+	}
+	re, err := regexp.Compile(w.Pattern)
+	if err != nil {
+		return fmt.Errorf("body pattern: %w", err)
 	}
 	// An ignore rule without a body pattern ignores every email from the
 	// sender whose subject matches: OTPs, notices, statement links.
 	if p.Direction == "ignore" {
 		return nil
 	}
-	if p.Pattern == "" {
+	if w.Pattern == "" {
 		return errors.New("body pattern is required")
 	}
-	if !ledger.Currencies[p.Currency] {
-		return errors.New("select a supported two-decimal currency")
-	}
-	if p.DateLayout == "" {
+	if w.DateLayout == "" {
 		return errors.New("date layout is required")
 	}
 	for _, name := range required {
@@ -117,16 +163,31 @@ func (p Parser) Parse(sender, subject, body string) (Preview, error) {
 	if !fromSender || !regexp.MustCompile(p.Subject).MatchString(subject) {
 		return Preview{}, nil
 	}
-	if p.Pattern == "" {
+	if p.Pattern == "" && len(p.Wordings) == 0 {
 		return Preview{Matched: true, Ignored: true}, nil
 	}
-	re := regexp.MustCompile(p.Pattern)
-	matches := re.FindAllStringSubmatch(body, 2)
-	if len(matches) == 0 {
-		return Preview{}, nil
+	var re *regexp.Regexp
+	var matches [][]string
+	var wording Wording
+	for _, w := range p.All() {
+		if w.Pattern == "" {
+			continue
+		}
+		candidate := regexp.MustCompile(w.Pattern)
+		found := candidate.FindAllStringSubmatch(body, 2)
+		if len(found) == 0 {
+			continue
+		}
+		if len(found) > 1 {
+			return Preview{Matched: true}, errors.New("multiple matches: an alert must produce exactly one transaction")
+		}
+		if re != nil {
+			return Preview{Matched: true}, errors.New("several wordings match; narrow one of them")
+		}
+		re, matches, wording = candidate, found, w
 	}
-	if len(matches) > 1 {
-		return Preview{Matched: true}, errors.New("multiple matches: an alert must produce exactly one transaction")
+	if re == nil {
+		return Preview{}, nil
 	}
 	if p.Direction == "ignore" {
 		return Preview{Matched: true, Ignored: true}, nil
@@ -150,7 +211,7 @@ func (p Parser) Parse(sender, subject, body string) (Preview, error) {
 		return Preview{Matched: true}, errors.New("merchant and exactly four account digits are required")
 	}
 	loc, _ := time.LoadLocation(p.Timezone)
-	date, err := time.ParseInLocation(p.DateLayout, get("date"), loc)
+	date, err := time.ParseInLocation(wording.DateLayout, get("date"), loc)
 	if err != nil {
 		return Preview{Matched: true}, errors.New("date does not match the layout")
 	}
@@ -173,7 +234,7 @@ func (p Parser) Parse(sender, subject, body string) (Preview, error) {
 	if issuer == "" {
 		issuer = p.Name
 	}
-	kind := p.AccountKind
+	kind := wording.AccountKind
 	if kind == "" {
 		kind = "unknown"
 	}

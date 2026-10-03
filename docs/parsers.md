@@ -67,6 +67,15 @@ Date layouts are Go's: `02-Jan-2006`, `2006-01-02`, `02/01/2006 15:04`.
   line confirms the transaction, and then the statement's description
   replaces it. Reconciliation never used the merchant: it matches on
   account, amount, currency, direction and date.
+- **Several wordings**: banks word one alert in several ways (HDFC's UPI
+  alerts, say). When you build a parser from an email and a parser for its
+  sender exists, **Save as → Another wording of** adds this wording to that
+  parser instead. Each wording has its own body pattern and date layout,
+  and may record onto a different account type (UPI from a bank account or
+  a RuPay card). An email must match exactly one wording. Editing a parser
+  lists its other wordings, and **Merge another parser into this one**
+  moves a parser's wordings over (same sender, issuer, direction, currency
+  and description) and deletes it; transactions don't change.
 - **Debit card** as the account type records a debit card's alerts on the
   bank account it draws on; see [Debit cards](#debit-cards).
 - An email must match **exactly one** parser, once. If two parsers match,

@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -983,5 +984,46 @@ func TestAlertWithoutMerchantTakesTheStatementsDescription(t *testing.T) {
 	rows, _ = s.Transactions(Filter{Status: "confirmed", Search: "PAYMENT"})
 	if len(rows) != 1 || rows[0].Merchant != "CREDIT CARD PAYMENT (Ref# 123456)" || rows[0].Placeholder || !rows[0].Matched {
 		t.Fatalf("%+v", rows)
+	}
+}
+
+func TestMergeParsersKeepsEveryWording(t *testing.T) {
+	s := testStore(t)
+	card := fixture.AlertParser()
+	card.Name, card.Issuer, card.AccountKind = "UPI on card", "HDFC", "card"
+	card, _ = s.SaveParser(card)
+	bank := fixture.AlertParser()
+	bank.Name, bank.Issuer, bank.AccountKind = "UPI from account", "HDFC", "bank"
+	bank.Pattern = `Rs\.(?P<amount>[\d,.]+) debited from account (?P<account>\d{4}) to (?P<merchant>.+) on (?P<date>\d{2}-\d{2}-\d{2})\.`
+	bank.DateLayout = "02-01-06"
+	bank, _ = s.SaveParser(bank)
+	s.Ingest(fixture.Mail("card", fixture.AlertBody))
+	s.Ingest(fixture.Mail("bank", "Rs.250.00 debited from account 9001 to Example Cafe on 05-10-26."))
+
+	other := fixture.AlertParser()
+	other.Name, other.Sender = "Another bank", "other@example.invalid"
+	other, _ = s.SaveParser(other)
+	if _, err := s.MergeParsers(card.ID, other.ID); !errors.Is(err, ErrCannotMerge) {
+		t.Fatal("merged parsers for different senders", err)
+	}
+	merged, err := s.MergeParsers(card.ID, bank.ID)
+	if err != nil || len(merged.Wordings) != 1 || merged.Wordings[0].AccountKind != "bank" {
+		t.Fatalf("%+v %v", merged, err)
+	}
+	parsers, _ := s.Parsers()
+	if len(parsers) != 2 {
+		t.Fatal("merged parser not removed", len(parsers))
+	}
+	// Both kinds of email still parse, onto the right accounts, and the
+	// merged parser counts both as its own.
+	s.Ingest(fixture.Mail("bank2", "Rs.99.00 debited from account 9001 to Example Bakery on 06-10-26."))
+	if rows, _ := s.Transactions(Filter{Account: ledger.AccountKey("HDFC", "bank", "9001")}); len(rows) != 2 {
+		t.Fatal(len(rows))
+	}
+	if h, _ := s.HandledBy(merged); h.Emails != 3 {
+		t.Fatal(h.Emails)
+	}
+	if again, _ := s.AddWording(merged.ID, merged.Wordings[0]); len(again.Wordings) != 1 {
+		t.Fatal("duplicate wording added")
 	}
 }

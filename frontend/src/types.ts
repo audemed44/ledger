@@ -13,7 +13,10 @@ export type Parser = {
   direction: string;
   enabled: boolean;
   description?: string;
+  wordings?: Wording[];
 };
+// Wording is another way an alert is worded, with its own body pattern.
+export type Wording = { pattern: string; date_layout: string; account_kind?: string };
 export type Transaction = {
   account_id?: string;
   account_kind?: string;
