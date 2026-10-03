@@ -535,3 +535,29 @@ it("links a debit card to its bank account", async () => {
   expect(posted).toEqual({ issuer: "HDFC", card: "4242", account: "9001" });
   expect(saved).toHaveBeenCalled();
 });
+
+it("re-reads a parser's emails when its mistake is fixed", async () => {
+  let saveURL = "";
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    if (url === "/api/parsers/3/handled") return reply({ emails: 4, confirmed: 1 });
+    if (String(url).startsWith("/api/parsers?")) {
+      saveURL = String(url);
+      return reply({ ...blankParser, id: 3, reread: 3, kept: 1 });
+    }
+    return reply({ processed: 0 });
+  });
+  const saved = vi.fn();
+  render(
+    <AlertParserEditor
+      initial={{ ...blankParser, id: 3, name: "Card", sender: "a@example.invalid", pattern: "x" }}
+      close={() => {}}
+      saved={saved}
+    />,
+  );
+  const option = await screen.findByLabelText(/Re-read the 4 emails/);
+  expect((option as HTMLInputElement).checked).toBe(true);
+  expect(screen.getByText(/1 confirmed by a statement/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /Save & retry backlog/ }));
+  await waitFor(() => expect(saved).toHaveBeenCalled());
+  expect(saveURL).toBe("/api/parsers?reread=1");
+});

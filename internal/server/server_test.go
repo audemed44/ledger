@@ -328,3 +328,37 @@ func TestWidgetAcceptsPDFsFromDrop(t *testing.T) {
 		t.Fatal(w.Body.String())
 	}
 }
+
+func TestParserChangesRereadTheirEmails(t *testing.T) {
+	s := testStore(t)
+	p, _ := s.SaveParser(fixture.AlertParser())
+	s.Ingest(fixture.Mail("one", fixture.AlertBody))
+	h := (&Server{Store: s, Token: "1234"}).Handler()
+	call := func(method, path, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer 1234")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w := call("GET", fmt.Sprintf("/api/parsers/%d/handled", p.ID), ""); !strings.Contains(w.Body.String(), `"emails":1`) {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	p.Direction = "credit"
+	raw, _ := json.Marshal(p)
+	if w := call("POST", "/api/parsers?reread=1", string(raw)); w.Code != 200 || !strings.Contains(w.Body.String(), `"reread":1`) || !strings.Contains(w.Body.String(), `"id":`) {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if rows, _ := s.Transactions(store.Filter{}); len(rows) != 1 || rows[0].Direction != "credit" {
+		t.Fatalf("%+v", rows)
+	}
+	if w := call("DELETE", fmt.Sprintf("/api/parsers/%d?reread=1", p.ID), ""); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if rows, _ := s.Transactions(store.Filter{}); len(rows) != 0 {
+		t.Fatal("deleted parser's transaction kept", rows)
+	}
+	if w := call("GET", "/api/parsers/999/handled", ""); w.Code != 404 {
+		t.Fatal(w.Code)
+	}
+}
