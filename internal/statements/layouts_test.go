@@ -150,3 +150,52 @@ func TestSBISavings(t *testing.T) {
 		"wrong layout":    layout(strings.ReplaceAll(text, "sbi.co.in", "example.in")),
 	})
 }
+
+func TestHDFCBankSavings(t *testing.T) {
+	text := fixture.HDFCBankStatement
+	check(t, "hdfc-savings", layout(text), Statement{
+		Issuer: "HDFC", AccountKind: "bank", Account: "4242", Date: "2026-10-31",
+		Opening: 2000000, TotalDue: 2749950,
+	}, []string{
+		"2026-10-02 -500.50 UPI-EXAMPLE GROCER-GROCER.EXAMPLE@OKEXAMPLE-EXMP0000001-600000000001-UPI",
+		"2026-10-05 -2000.00 ATW-400000XXXXXX4242-EXAMPLE TOWN",
+		"2026-10-25 +9000.00 NEFT CR-EXMP0000001-EXAMPLE EMPLOYER PRIVATE LIMITED-EXAMPLE PERSON-EXMPN000000000001",
+		"2026-10-28 +1000.00 UPI-EXAMPLE FRIEND-FRIEND@OKEXAMPLE-EXMP0000002-600000000002-FOR DINNER SHARE",
+	})
+	s, _ := ParseWith("hdfc-savings", layout(text))
+	if s.Transactions[1].Reference != "1001" {
+		t.Fatal("reference", s.Transactions[1])
+	}
+	failsClosed(t, "hdfc-savings", map[string]Text{
+		"missing row":     layout(strings.Replace(text, "05/10/2026       ATW-400000XXXXXX4242-EXAMPLE TOWN                      1001                                    05/10/2026                             2,000.00                 0.00               17,499.50\n", "", 1)),
+		"running balance": layout(strings.Replace(text, "17,499.50", "17,500.50", 1)),
+		"count":           layout(strings.Replace(text, "2                         2   ", "3                         2   ", 1)),
+		"other account":   layout(strings.Replace(text, "50100000004242              OTHER", "50100000008080              OTHER", 1)),
+		"no summary":      layout(strings.Replace(text, "20,000.00                                  2", "", 1)),
+		"wrong layout":    layout(strings.ReplaceAll(text, "HDFC BANK LIMITED", "OTHER BANK")),
+		"other layout":    layout(fixture.SBIStatement),
+	})
+}
+
+// Each layout reads only its own bank's statements.
+func TestLayoutsRefuseOtherBanks(t *testing.T) {
+	fixtures := map[string]Text{
+		"hdfc-credit-card":  layout(fixture.Statement),
+		"axis-credit-card":  layout(fixture.AxisStatement),
+		"icici-credit-card": {Layout: fixture.ICICIStatement.Layout, Raw: fixture.ICICIStatement.Raw},
+		"idfc-credit-card":  layout(fixture.IDFCStatement),
+		"sbi-savings":       layout(fixture.SBIStatement),
+		"hdfc-savings":      layout(fixture.HDFCBankStatement),
+	}
+	if len(fixtures) != len(Adapters) {
+		t.Fatal("a layout has no fixture")
+	}
+	for _, a := range Adapters {
+		for id, text := range fixtures {
+			s, err := ParseWith(a.ID, text)
+			if accepted := err == nil && s.Balanced; accepted != (id == a.ID) {
+				t.Errorf("%s reading %s: %v %v", a.ID, id, err, s.Balanced)
+			}
+		}
+	}
+}
