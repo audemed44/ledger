@@ -103,6 +103,11 @@ var Adapters = []Adapter{{
 	Name:        "HDFC Credit Card Parser v1",
 	Description: "HDFC credit card summary and dated transaction table",
 	parse:       func(t Text, tolerance int64) (Statement, error) { return ParseHDFCWithTolerance(t.Layout, tolerance) },
+}, {
+	ID:          "axis-credit-card",
+	Name:        "Axis Credit Card Parser v1",
+	Description: "Axis Bank credit card payment summary and Dr/Cr transaction lines",
+	parse:       parseAxis,
 }}
 
 // adapter finds a layout by ID.
