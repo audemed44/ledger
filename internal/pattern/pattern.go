@@ -27,8 +27,9 @@ func init() {
 // IsMonth reports whether word is an English month name or abbreviation.
 func IsMonth(word string) bool { return months[strings.ToLower(word)] }
 
-// Literal matches s, with whitespace runs loosened to \s+, numbers to Number
-// and month names to any word.
+// Literal matches s, with whitespace runs loosened to \s+, numbers to Number,
+// month names to any word, and runs mixing letters and digits to any such
+// run.
 func Literal(s string) string {
 	var b strings.Builder
 	r := []rune(s)
@@ -40,6 +41,12 @@ func Literal(s string) string {
 				j++
 			}
 			b.WriteString(`\s+`)
+		case code(r, i) > i:
+			// A run mixing letters and digits (a reference or random code
+			// such as 19d48e58, a masked number, 16Jun2026) changes between
+			// emails as a whole.
+			j = code(r, i)
+			b.WriteString(`[A-Za-z0-9]+`)
 		case unicode.IsDigit(r[i]):
 			end := i
 			for j = i; j < len(r) && (unicode.IsDigit(r[j]) || r[j] == ',' || r[j] == '.'); j++ {
@@ -74,4 +81,19 @@ func Whole(s string) string {
 		return ""
 	}
 	return "(?i)^" + Literal(s) + "$"
+}
+
+// code returns the end of the run of letters and digits starting at i when
+// it mixes both, or i when it doesn't.
+func code(r []rune, i int) int {
+	letters, digits := false, false
+	j := i
+	for ; j < len(r) && (unicode.IsLetter(r[j]) || unicode.IsDigit(r[j])); j++ {
+		letters = letters || unicode.IsLetter(r[j])
+		digits = digits || unicode.IsDigit(r[j])
+	}
+	if letters && digits {
+		return j
+	}
+	return i
 }
