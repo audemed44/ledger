@@ -85,6 +85,7 @@ they belong together.
 | `LEDGER_NOTIFY_URL` | empty | Apprise endpoint for payment reminders, e.g. `http://lookout:8080/notify/ledger`; off when empty |
 | `HOMEPAGE_URL` | empty | Foyer's address, for a link back to it in the header |
 | `LEDGER_REMINDER_DAYS` | `5,1,0` | Days before a card's due date to remind; reminders start at 9:00 |
+| `LEDGER_REMINDER_ON_STATEMENT` | `false` | Also notify once when a card's new statement arrives (while it isn't yet due) |
 | `LEDGER_FETCH_STATEMENT_LINKS` | `true` | Download HDFC Bank statements from the SmartStatement link in their emails |
 | `LEDGER_SECURE_COOKIES` | `true` | |
 | `LEDGER_DATA_DIR` | `/data` | |

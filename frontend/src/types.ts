@@ -59,7 +59,7 @@ export type Summary = {
   queued: number;
   parsers: number;
   dues: Due[];
-  reminders: { enabled: boolean; days: number[] | null };
+  reminders: { enabled: boolean; days: number[] | null; on_statement: boolean };
   month: string;
   demo: boolean;
 };

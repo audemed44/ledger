@@ -11,7 +11,7 @@ const summary = {
   queued: 0,
   parsers: 0,
   dues: [],
-  reminders: { enabled: false, days: null },
+  reminders: { enabled: false, days: null, on_statement: false },
   month: "2026-10",
   demo: false,
 };
@@ -195,7 +195,7 @@ it("lists card dues and marks one paid", async () => {
       summary={{
         ...summary,
         dues: [due],
-        reminders: { enabled: true, days: [0, 1, 5] },
+        reminders: { enabled: true, days: [0, 1, 5], on_statement: false },
       }}
       saved={saved}
     />,
