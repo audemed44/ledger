@@ -26,6 +26,19 @@ const MaxUpload = 18 << 20
 // archived, imported if a statement parser's trigger fits, and otherwise
 // waits in the inbox. The same file uploaded again is the same email.
 func (s *Store) Upload(name string, pdf []byte) (Message, error) {
+	return s.file(uploads, name, pdf)
+}
+
+// source is who files a PDF that didn't arrive attached to an email.
+type source struct {
+	sender, display, subject, note string
+}
+
+var uploads = source{UploadSender, "Ledger uploads", "Uploaded statement: ", "Uploaded to Ledger by hand."}
+
+// file stores a PDF as an email from src, archived and processed like mail.
+// The same file filed again is the same email.
+func (s *Store) file(src source, name string, pdf []byte) (Message, error) {
 	if len(pdf) > MaxUpload {
 		return Message{}, fmt.Errorf("PDF exceeds %d MiB", MaxUpload>>20)
 	}
@@ -50,13 +63,13 @@ func (s *Store) Upload(name string, pdf []byte) (Message, error) {
 
 	hash := sha256.Sum256(pdf)
 	var b strings.Builder
-	fmt.Fprintf(&b, "From: Ledger uploads <%s>\r\nSubject: %s\r\nDate: %s\r\nMessage-ID: <%s@upload.ledger.invalid>\r\n"+
+	fmt.Fprintf(&b, "From: %s <%s>\r\nSubject: %s\r\nDate: %s\r\nMessage-ID: <%s@upload.ledger.invalid>\r\n"+
 		"MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=ledger-upload\r\n\r\n"+
-		"--ledger-upload\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nUploaded to Ledger by hand.\r\n"+
+		"--ledger-upload\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n"+
 		"--ledger-upload\r\nContent-Type: application/pdf\r\nContent-Disposition: %s\r\n"+
 		"Content-Transfer-Encoding: base64\r\n\r\n",
-		UploadSender, mime.QEncoding.Encode("utf-8", "Uploaded statement: "+name),
-		time.Now().Format(time.RFC1123Z), hex.EncodeToString(hash[:]),
+		src.display, src.sender, mime.QEncoding.Encode("utf-8", src.subject+name),
+		time.Now().Format(time.RFC1123Z), hex.EncodeToString(hash[:]), src.note,
 		mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 	encoded := base64.StdEncoding.EncodeToString(pdf)
 	for len(encoded) > 76 {

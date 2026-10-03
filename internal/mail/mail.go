@@ -37,8 +37,11 @@ type Attachment struct {
 // Message is a decoded email. Reason is set when the message can't be read
 // as an alert: MIME problems (prefixed "MIME:") or a PDF statement.
 type Message struct {
-	Key         string // "message-id:<id>", or empty when there's no Message-ID
-	Sender      string
+	Key    string // "message-id:<id>", or empty when there's no Message-ID
+	Sender string
+	// Links are the http(s) URLs of the HTML part's links, which statement
+	// emails without a PDF point to.
+	Links       []string
 	Subject     string
 	Date        string // RFC 3339, or empty when there's no Date header
 	Body        string
@@ -135,6 +138,9 @@ func Decode(raw []byte) Message {
 		}
 	}
 
+	if rich.Len() > 0 {
+		m.Links = htmlLinks(rich.String())
+	}
 	m.Body = plain.String()
 	if strings.TrimSpace(m.Body) != "" {
 		m.BodyFormat = "plain"
@@ -263,6 +269,35 @@ func htmlText(source string) (string, error) {
 		}
 	}
 	return strings.Join(lines, "\n"), nil
+}
+
+// htmlLinks returns the http(s) hrefs of an HTML document's links, at most
+// 100.
+func htmlLinks(source string) []string {
+	root, err := html.Parse(strings.NewReader(source))
+	if err != nil {
+		return nil
+	}
+	links := []string{}
+	var walk func(*html.Node, int)
+	walk = func(n *html.Node, depth int) {
+		if depth > 256 || len(links) >= 100 {
+			return
+		}
+		if n.Type == html.ElementNode && n.Data == "a" {
+			for _, a := range n.Attr {
+				href := strings.TrimSpace(a.Val)
+				if a.Key == "href" && (strings.HasPrefix(href, "https://") || strings.HasPrefix(href, "http://")) {
+					links = append(links, href)
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c, depth+1)
+		}
+	}
+	walk(root, 0)
+	return links
 }
 
 func hidden(n *html.Node) bool {

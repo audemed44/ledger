@@ -11,6 +11,8 @@ import (
 	"sync"
 
 	_ "modernc.org/sqlite" // pure Go, so the build stays cgo-free
+
+	"github.com/audemed44/ledger/internal/smartstatement"
 )
 
 // BackfillStart is the earliest email date Ledger imports.
@@ -25,6 +27,9 @@ type Store struct {
 	Dir string
 	// PDFPasswords are the LEDGER_PDF_PASSWORDS slots, kept in memory only.
 	PDFPasswords []string
+	// Statements downloads statements that emails link to instead of
+	// attaching; nil turns that off.
+	Statements *smartstatement.Fetcher
 	// mu serialises writes that read then update, such as processing a
 	// message or importing a statement.
 	mu sync.Mutex

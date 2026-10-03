@@ -16,6 +16,7 @@ import (
 	"github.com/audemed44/ledger/internal/alerts"
 	"github.com/audemed44/ledger/internal/fixture"
 	"github.com/audemed44/ledger/internal/ledger"
+	"github.com/audemed44/ledger/internal/smartstatement"
 	"github.com/audemed44/ledger/internal/statements"
 )
 
@@ -1149,5 +1150,61 @@ func TestImportStatementWithNoLines(t *testing.T) {
 	}
 	if m, _ := s.Message(id); m.State != "statement" {
 		t.Fatal(m.State)
+	}
+}
+
+func TestStatementLinksAreDownloaded(t *testing.T) {
+	fixture.RequirePDFTools(t)
+	s := testStore(t)
+	bank := fixture.NewSmartStatementBank(t, "Secret12", fixture.PDF(fixture.HDFCBankStatement))
+	s.Statements = &smartstatement.Fetcher{Host: strings.TrimPrefix(bank.URL, "https://"), Client: bank.Client()}
+	s.PDFPasswords = []string{"wrong", "Secret12"}
+
+	// The link email is downloaded and leaves the inbox; the statement
+	// waits for review, with no automatic import yet.
+	link, _ := s.Ingest(fixture.SmartStatementMail("oct", bank.SmartStatementLink("job-oct")))
+	m, _ := s.Message(link)
+	if m.State != "fetched" || !strings.Contains(m.Reason, "downloaded") {
+		t.Fatal(m.State, m.Reason)
+	}
+	var filed int64
+	s.DB.QueryRow("SELECT id FROM messages WHERE sender=?", SmartStatementSender).Scan(&filed)
+	review, _ := s.ReviewMessage(filed)
+	if review.State != "queued" || !review.HasPDF || len(review.Attachments) != 1 || review.Attachments[0].Name != "XXXXXXXX4242_16Sep2026_TO_15Oct2026.pdf" {
+		t.Fatalf("%+v", review)
+	}
+
+	// Import it by hand with an automatic import; the next link imports itself.
+	p, _ := s.SaveStatementParser(statements.Parser{Name: "HDFC Bank Account Parser v1", Adapter: "hdfc-savings", BalanceTolerancePaise: 99, PasswordSlot: 2})
+	if _, err := s.AddStatementTrigger(p.ID, filed, review.Attachments[0].Part); err != nil {
+		t.Fatal(err)
+	}
+	s.Reprocess()
+	if m, _ = s.Message(filed); m.State != "statement" {
+		t.Fatal("first download not imported", m.Reason)
+	}
+	next := strings.ReplaceAll(fixture.HDFCBankStatement, "31/10/26", "30/11/26")
+	bank2 := fixture.NewSmartStatementBank(t, "Secret12", fixture.PDF(next))
+	s.Statements = &smartstatement.Fetcher{Host: strings.TrimPrefix(bank2.URL, "https://"), Client: bank2.Client()}
+	s.Ingest(fixture.SmartStatementMail("nov", bank2.SmartStatementLink("job-nov")))
+	var imported int
+	s.DB.QueryRow("SELECT count(*) FROM messages WHERE sender=? AND state='statement'", SmartStatementSender).Scan(&imported)
+	if imported != 2 {
+		t.Fatal("next download not imported automatically", imported)
+	}
+	// With the parser's password slot set, only that password is sent.
+	if hits := bank2.Hits.Load(); hits != 4 {
+		t.Fatal("requests", hits)
+	}
+
+	// An expired link waits with the fallback, and isn't fetched again.
+	old, _ := s.Ingest(fixture.SmartStatementMail("old", bank2.SmartStatementLink("expired")))
+	if m, _ = s.Message(old); m.State != "queued" || !strings.HasPrefix(m.Reason, LinkUnavailable) || !strings.Contains(m.Reason, "Upload PDF") {
+		t.Fatal(m.State, m.Reason)
+	}
+	hits := bank2.Hits.Load()
+	s.Reprocess()
+	if m, _ = s.Message(old); bank2.Hits.Load() != hits || !strings.Contains(m.Reason, "expired") {
+		t.Fatal("expired link fetched again", m.Reason)
 	}
 }
