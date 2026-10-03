@@ -180,7 +180,13 @@ func (p Parser) Parse(text Text) (Statement, error) {
 // ParseWith runs the layout with ID id over text, with the default 99
 // paise rounding tolerance.
 func ParseWith(id string, text Text) (Statement, error) {
-	return Parser{Adapter: id, BalanceTolerancePaise: 99}.Parse(text)
+	return ParseWithTolerance(id, text, 99)
+}
+
+// ParseWithTolerance runs the layout with ID id over text, accepting up to
+// tolerance paise of rounding.
+func ParseWithTolerance(id string, text Text, tolerance int64) (Statement, error) {
+	return Parser{Adapter: id, BalanceTolerancePaise: tolerance}.Parse(text)
 }
 
 // Statement is one parsed statement: its summary, its lines and whether they

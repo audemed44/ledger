@@ -49,6 +49,7 @@ func ParseHDFCWithTolerance(text string, tolerance int64) (Statement, error) {
 	if !strings.Contains(strings.ToLower(text), "hdfc") || !strings.Contains(text, "PREVIOUS STATEMENT DUES") {
 		return s, errors.New("unsupported statement layout; expected HDFC credit card summary")
 	}
+	holder := ""
 	lines := strings.Split(text, "\n")
 	summaryStart, summaryEnd, dueStart := -1, -1, -1
 	for i, line := range lines {
@@ -71,6 +72,10 @@ func ParseHDFCWithTolerance(text string, tolerance int64) (Statement, error) {
 			}
 		}
 		if strings.Contains(line, "Credit Card No.") {
+			// The cardholder's name precedes it; tables repeat it.
+			if holder == "" {
+				holder = strings.TrimSpace(strings.SplitN(line, "Credit Card No.", 2)[0])
+			}
 			digits := strings.TrimSpace(hdfcCardNo.FindString(strings.SplitN(line, "Credit Card No.", 2)[1]))
 			if len(digits) >= 4 && ledger.LastFour.MatchString(digits[len(digits)-4:]) {
 				if s.Account != "" && s.Account != digits[len(digits)-4:] {
@@ -156,7 +161,11 @@ func ParseHDFCWithTolerance(text string, tolerance int64) (Statement, error) {
 		}
 		t := tables[len(tables)-1]
 		if !hdfcDatedRow.MatchString(l) {
-			if at := indent(l); at >= t.desc-1 && at <= t.desc+1 && !strings.Contains(l, "CKYC") {
+			// Tables start with the cardholder's name (and sometimes a CKYC
+			// ID); that's not part of any description.
+			text := strings.TrimSpace(l)
+			cardholder := strings.Contains(text, "CKYC") || (holder != "" && strings.HasPrefix(strings.ToUpper(text), strings.ToUpper(holder)))
+			if at := indent(l); at >= t.desc-1 && at <= t.desc+1 && !cardholder {
 				t.extra[i] = strings.TrimSpace(hdfcGap.Split(strings.TrimSpace(l), 2)[0])
 			}
 			continue
@@ -205,9 +214,6 @@ func ParseHDFCWithTolerance(text string, tolerance int64) (Statement, error) {
 			}
 			line(&s, date, merchants[n], amount, credit, "")
 		}
-	}
-	if len(s.Transactions) == 0 {
-		return s, errors.New("no statement transactions found")
 	}
 	if debits != s.Purchases {
 		rowErrors = append(rowErrors, errors.New("transaction debits do not equal summary purchases"))

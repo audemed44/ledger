@@ -116,15 +116,13 @@ func wrapped(rows []int, extra map[int]string, onRow []string, join string) ([]s
 // finish checks the lines against the summary, which the layout has already
 // set: Opening and TotalDue (the closing balance), Purchases (debits) and
 // Payments (credits). It sets the discrepancy and whether the statement
-// balanced, within tolerance paise.
+// balanced, within tolerance paise. A statement may have no lines, when
+// nothing moved that month; the summary then has to say so.
 func finish(s *Statement, debits, credits, tolerance int64, rowErrors []error) (Statement, error) {
 	if tolerance < 0 || tolerance > 99 {
 		return *s, errors.New("balance tolerance must be between 0 and 99 paise")
 	}
 	s.BalanceTolerancePaise = tolerance
-	if len(s.Transactions) == 0 {
-		rowErrors = append(rowErrors, errors.New("no statement transactions found"))
-	}
 	if debits != s.Purchases {
 		rowErrors = append(rowErrors, errors.New("transaction debits do not equal the summary's debits"))
 	}
@@ -150,6 +148,23 @@ func finish(s *Statement, debits, credits, tolerance int64, rowErrors []error) (
 		s.Warnings = append(s.Warnings, "Opening balance plus the lines differs from the closing balance; review required, do not import")
 	}
 	return *s, nil
+}
+
+// follow checks a line's running balance against the previous one plus the
+// line. A slip within tolerance paise (the bank's own rounding: SBI has
+// printed an opening balance a paisa off its next running balance) is noted
+// as a warning; a larger one is an error. Either way, the bank's running
+// balance is followed from there, and the final balance check still
+// applies.
+func follow(s *Statement, expected, running, tolerance int64, line int) error {
+	if diff := running - expected; diff != 0 {
+		if diff < -tolerance || diff > tolerance {
+			return fmt.Errorf("running balance doesn't follow on line %d", line)
+		}
+		s.Warnings = append(s.Warnings, fmt.Sprintf(
+			"Running balance on line %d is %d paise off the line before; accepted within the %d-paise rounding tolerance", line, diff, tolerance))
+	}
+	return nil
 }
 
 // newStatement starts a statement for one account.

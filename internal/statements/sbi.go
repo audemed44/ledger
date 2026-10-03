@@ -17,7 +17,8 @@ var (
 	sbiAccount = regexp.MustCompile(`^\s*X{4,}(\d{4})\s*$`)
 	sbiOpening = regexp.MustCompile(`Balance on (\d{2}-\d{2}-\d{2}):\s+([\d,]+\.\d{2})`)
 	sbiClosing = regexp.MustCompile(`Closing Balance on (\d{2}-\d{2}-\d{2}):\s+([\d,]+\.\d{2})`)
-	sbiRow     = regexp.MustCompile(`^\s*(\d{2}-\d{2}-\d{2})(\s+.*?)\s(\S+)\s+([\d,]+(?:\.\d{2})?)\s+([\d,]+(?:\.\d{2})?)\s+([\d,]+\.\d{2})\s*$`)
+	// An empty credit or debit column reads "0", or "-" in older statements.
+	sbiRow     = regexp.MustCompile(`^\s*(\d{2}-\d{2}-\d{2})(\s+.*?)\s(\S+)\s+([\d,]+(?:\.\d{2})?|-)\s+([\d,]+(?:\.\d{2})?|-)\s+([\d,]+\.\d{2})\s*$`)
 	sbiDatedAt = regexp.MustCompile(`^\s*\d{2}-\d{2}-\d{2}\s`)
 )
 
@@ -106,18 +107,19 @@ func parseSBI(t Text, tolerance int64) (Statement, error) {
 	for n, i := range rows {
 		m := sbiRow.FindStringSubmatch(lines[i])
 		date, e := dateIn("02-01-06", m[1])
-		credit, e2 := money(m[4])
-		debit, e3 := money(m[5])
+		dash := strings.NewReplacer("-", "0")
+		credit, e2 := money(dash.Replace(m[4]))
+		debit, e3 := money(dash.Replace(m[5]))
 		running, e4 := money(m[6])
 		if e != nil || e2 != nil || e3 != nil || e4 != nil || (credit == 0) == (debit == 0) {
 			rowErrors = append(rowErrors, fmt.Errorf("invalid date or amounts on line %d", i+1))
 			continue
 		}
 		balance += credit - debit
-		if balance != running {
-			rowErrors = append(rowErrors, fmt.Errorf("running balance doesn't follow on line %d", i+1))
-			balance = running
+		if err := follow(&s, balance, running, tolerance, i+1); err != nil {
+			rowErrors = append(rowErrors, err)
 		}
+		balance = running
 		reference := m[3]
 		if reference == "-" {
 			reference = ""

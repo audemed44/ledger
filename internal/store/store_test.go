@@ -1132,3 +1132,22 @@ func TestTransfersBetweenYourAccounts(t *testing.T) {
 	}
 	_ = sbiSide
 }
+
+func TestImportStatementWithNoLines(t *testing.T) {
+	s := testStore(t)
+	p := fixture.AlertParser()
+	p.Issuer, p.AccountKind = "HDFC", "card"
+	s.SaveParser(p)
+	// An alert in the period that the quiet statement doesn't contain.
+	s.Ingest(fixture.Mail("missing", "INR 40.00 at Example Shop card 4242 on 2026-09-20"))
+	st, _ := statements.ParseHDFC(fixture.Statement)
+	st.Transactions, st.Opening, st.Purchases, st.Payments, st.TotalDue = nil, 95000, 0, 0, 95000
+	id, _ := s.Ingest(fixture.StatementMail("quiet", fixture.Statement))
+	out, err := s.ImportStatement(id, 0, PDFPreview{Statement: &st}, statements.Fingerprint(st))
+	if err != nil || out.Count != 0 || out.Flagged != 1 {
+		t.Fatal(out, err)
+	}
+	if m, _ := s.Message(id); m.State != "statement" {
+		t.Fatal(m.State)
+	}
+}

@@ -199,3 +199,56 @@ func TestLayoutsRefuseOtherBanks(t *testing.T) {
 		}
 	}
 }
+
+// Older SBI statements mark an empty column "-"; SBI has also printed a
+// running balance a paisa off the line before, which the rounding
+// tolerance accepts with a warning.
+func TestSBIDashesAndRoundingSlips(t *testing.T) {
+	dashes := strings.NewReplacer(
+		"-           5000.00                    0       15000.00", "-           5000.00                    -       15000.00",
+		"1234                    0          2000.00", "1234                    -          2000.00",
+	).Replace(fixture.SBIStatement)
+	if s, err := ParseWith("sbi-savings", layout(dashes)); err != nil || !s.Balanced || len(s.Transactions) != 3 {
+		t.Fatalf("%+v %v", s, err)
+	}
+	// Opening 10,000.00 but the first running balance one paisa high, and
+	// every later balance following on from it.
+	slip := strings.NewReplacer("15000.00", "15000.01", "13000.00", "13000.01", "12249.50", "12249.51").Replace(fixture.SBIStatement)
+	s, err := ParseWith("sbi-savings", layout(slip))
+	if err != nil || !s.Balanced || len(s.Warnings) < 2 {
+		t.Fatalf("%+v %v", s, err)
+	}
+	if _, err = ParseWithTolerance("sbi-savings", layout(slip), 0); err == nil {
+		t.Fatal("slip accepted with no tolerance")
+	}
+}
+
+// A long ICICI merchant wraps its raw row onto the next lines.
+func TestICICIWrappedRawRow(t *testing.T) {
+	raw := strings.Replace(fixture.ICICIStatement.Raw, "EXAMPLE BOOKS 24X7 BENGALURU IN 15 750.25",
+		"EXAMPLE BOOKS 24X7 BENGALURU\nIN\n15 750.25", 1)
+	s, err := ParseWith("icici-credit-card", Text{Layout: fixture.ICICIStatement.Layout, Raw: raw})
+	if err != nil || !s.Balanced || s.Transactions[2].Merchant != "EXAMPLE BOOKS 24X7 BENGALURU IN" {
+		t.Fatalf("%+v %v", s.Transactions, err)
+	}
+}
+
+// A month with nothing on the card has no transaction section, and only
+// the "(FIRST Select XX4242)" card line.
+func TestIDFCQuietMonth(t *testing.T) {
+	text := fixture.IDFCStatement
+	text = text[:strings.Index(text, "YOUR TRANSACTIONS")]
+	text = strings.NewReplacer(
+		"r1,500.00\n", "r0.00\n", "r30.00\n", "r0.00\n",
+		"r20.00 CR\n      Pay", "r50.00 CR\n      Pay", "r20.00 CR    ", "r50.00 CR    ",
+	).Replace(text)
+	s, err := ParseWith("idfc-credit-card", layout(text))
+	if err != nil || !s.Balanced || len(s.Transactions) != 0 || s.Account != "4242" || s.TotalDue != -5000 {
+		t.Fatalf("%+v %v", s, err)
+	}
+	// Without lines, the summary still has to add up.
+	moved := strings.Replace(text, "r0.00\n          Payments", "r30.00\n          Payments", 1)
+	if s, err = ParseWith("idfc-credit-card", layout(moved)); err == nil && s.Balanced {
+		t.Fatal("summary with movement but no lines accepted")
+	}
+}

@@ -12,7 +12,7 @@ import (
 // in credit), then "dd Mon yy" lines whose details may wrap onto the lines
 // around them. pdftotext extracts the ₹ glyph as "r".
 var (
-	idfcCard    = regexp.MustCompile(`Card Number:\s*X+\s*(\d{4})`)
+	idfcCard    = regexp.MustCompile(`Card Number:\s*X+\s*(\d{4})|\(FIRST [^)]*XX(\d{4})\)`)
 	idfcDate    = regexp.MustCompile(`\d{2}/[A-Za-z]{3}/\d{4}`)
 	idfcAmount  = regexp.MustCompile(`[r₹]([\d,]+\.\d{2})(?:\s+(CR|DR)\b)?`)
 	idfcRow     = regexp.MustCompile(`^\s*(\d{2} [A-Za-z]{3} \d{2})\s.*?([\d,]+\.\d{2})\s+(DR|CR)\s*$`)
@@ -30,12 +30,12 @@ var (
 func parseIDFC(t Text, tolerance int64) (Statement, error) {
 	s := newStatement("IDFC", "card")
 	text := t.Layout
-	if !strings.Contains(text, "IDFC FIRST") || !strings.Contains(text, "YOUR TRANSACTIONS") ||
-		!strings.Contains(text, "Statement Summary") {
+	// A month with no transactions has no transaction section at all.
+	if !strings.Contains(text, "IDFC FIRST") || !strings.Contains(text, "Statement Summary") {
 		return s, errors.New("unsupported statement layout; expected an IDFC FIRST Bank credit card statement")
 	}
 	for _, m := range idfcCard.FindAllStringSubmatch(text, -1) {
-		if err := setAccount(&s, m[1]); err != nil {
+		if err := setAccount(&s, m[1]+m[2]); err != nil {
 			return s, err
 		}
 	}
@@ -81,14 +81,16 @@ func parseIDFC(t Text, tolerance int64) (Statement, error) {
 			table = i
 		}
 	}
-	if len(found) != len(idfcSummary) || s.Date == "" || s.DueDate == "" || table < 0 {
+	if len(found) != len(idfcSummary) || s.Date == "" || s.DueDate == "" {
 		return s, errors.New("statement summary, dates or transaction table not found")
 	}
 	s.Opening, s.TotalDue = found["opening"], found["total"]
 	s.Purchases, s.Payments = found["purchases"]+found["debits"], found["payments"]
 
-	details := column(lines[table], "Transaction Details")
-	emi := column(lines[table], "EMI")
+	details, emi := -10, -1
+	if table >= 0 {
+		details, emi = column(lines[table], "Transaction Details"), column(lines[table], "EMI")
+	}
 	var debits, credits int64
 	var rowErrors []error
 	rows, onRow, extra := []int{}, []string{}, map[int]string{}
@@ -99,7 +101,7 @@ func parseIDFC(t Text, tolerance int64) (Statement, error) {
 			}
 			continue
 		}
-		if i < table || idfcRow.FindStringSubmatch(l) == nil {
+		if table < 0 || i < table || idfcRow.FindStringSubmatch(l) == nil {
 			rowErrors = append(rowErrors, fmt.Errorf("unparsed transaction on line %d", i+1))
 			continue
 		}
