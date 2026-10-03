@@ -58,15 +58,16 @@ func (s *Store) PreviewPDF(ctx context.Context, id int64, part int, p *statement
 	}
 	s.pdf.Lock()
 	defer s.pdf.Unlock()
-	out.Text, out.PasswordSlot, err = statements.ExtractWithPasswords(ctx, f.Name(), passwords, slot)
+	text, slot, err := statements.ExtractWithPasswords(ctx, f.Name(), passwords, slot)
 	if err != nil {
 		return out, err
 	}
+	out.Text, out.PasswordSlot = text.Layout, slot
 	if p == nil {
 		return out, nil
 	}
 	out.ParserName = p.Name
-	statement, err := p.Parse(out.Text)
+	statement, err := p.Parse(text)
 	out.Statement = &statement
 	if err != nil {
 		out.ParseError = err.Error()

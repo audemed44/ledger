@@ -116,7 +116,7 @@ func TestPDFPasswordTrials(t *testing.T) {
 		t.Fatalf("encrypt fixture: %v %s", e, out)
 	}
 	text, slot, e := ExtractWithPasswords(t.Context(), encrypted, []string{"fixture-one", "fixture-two", "fixture-three"}, 0)
-	if e != nil || slot != 2 || !strings.Contains(text, "EXAMPLE SHOP") {
+	if e != nil || slot != 2 || !strings.Contains(text.Layout, "EXAMPLE SHOP") || !strings.Contains(text.Raw, "EXAMPLE SHOP") {
 		t.Fatalf("slot=%d err=%v", slot, e)
 	}
 	if _, _, e = ExtractWithPasswords(t.Context(), encrypted, []string{"fixture-one", "fixture-two"}, 1); e == nil {

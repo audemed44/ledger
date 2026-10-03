@@ -99,7 +99,7 @@ func PDF(text string) []byte {
 	objects := []string{
 		"<< /Type /Catalog /Pages 2 0 R >>",
 		"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 1000 1100] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 1400 1100] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
 		"<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>",
 		fmt.Sprintf("<< /Length %d >>\nstream\n%sendstream", body.Len(), body.String()),
 	}
