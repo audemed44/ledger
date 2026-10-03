@@ -125,6 +125,15 @@ func main() {
 	<-polling
 }
 
+// layoutIDs lists the statement layouts check-statement can use.
+func layoutIDs() string {
+	ids := []string{}
+	for _, a := range statements.Adapters {
+		ids = append(ids, a.ID)
+	}
+	return strings.Join(ids, ", ")
+}
+
 // healthcheck is the container's HEALTHCHECK.
 func healthcheck() int {
 	client := http.Client{Timeout: 3 * time.Second}
@@ -148,13 +157,14 @@ func healthcheck() int {
 func checkStatement(args []string) int {
 	flags := flag.NewFlagSet("check-statement", flag.ExitOnError)
 	path := flags.String("pdf", "", "path to local statement PDF")
+	layout := flags.String("layout", "hdfc-credit-card", "statement layout ID: "+layoutIDs())
 	flags.Parse(args)
 	text, err := statements.Extract(context.Background(), *path, os.Getenv("LEDGER_PDF_PASSWORD"))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	statement, err := statements.ParseHDFC(text)
+	statement, err := statements.ParseWith(*layout, text)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

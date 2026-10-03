@@ -92,6 +92,9 @@ type Adapter struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	// parse reads a statement, allowing tolerance paise of rounding in
+	// the final balance.
+	parse func(text Text, tolerance int64) (Statement, error)
 }
 
 // Adapters lists the layouts Ledger can read.
@@ -99,7 +102,18 @@ var Adapters = []Adapter{{
 	ID:          "hdfc-credit-card",
 	Name:        "HDFC Credit Card Parser v1",
 	Description: "HDFC credit card summary and dated transaction table",
+	parse:       func(t Text, tolerance int64) (Statement, error) { return ParseHDFCWithTolerance(t.Layout, tolerance) },
 }}
+
+// adapter finds a layout by ID.
+func adapter(id string) (Adapter, bool) {
+	for _, a := range Adapters {
+		if a.ID == id {
+			return a, true
+		}
+	}
+	return Adapter{}, false
+}
 
 // MaxPasswords is how many LEDGER_PDF_PASSWORDS slots are supported.
 const MaxPasswords = 32
@@ -112,7 +126,7 @@ func (p Parser) Validate() error {
 	if strings.TrimSpace(p.Name) == "" || len(p.Name) > 100 {
 		return errors.New("Statement parser name is required (up to 100 characters)")
 	}
-	if p.Adapter != "hdfc-credit-card" {
+	if _, ok := adapter(p.Adapter); !ok {
 		return errors.New("Unsupported statement layout; a dedicated adapter is needed")
 	}
 	if p.PasswordSlot < 0 || p.PasswordSlot > MaxPasswords {
@@ -130,8 +144,18 @@ func (p Parser) Validate() error {
 }
 
 // Parse runs the preset's adapter over extracted text.
-func (p Parser) Parse(text string) (Statement, error) {
-	return ParseHDFCWithTolerance(text, p.BalanceTolerancePaise)
+func (p Parser) Parse(text Text) (Statement, error) {
+	a, ok := adapter(p.Adapter)
+	if !ok {
+		return Statement{}, errors.New("unsupported statement layout")
+	}
+	return a.parse(text, p.BalanceTolerancePaise)
+}
+
+// ParseWith runs the layout with ID id over text, with the default 99
+// paise rounding tolerance.
+func ParseWith(id string, text Text) (Statement, error) {
+	return Parser{Adapter: id, BalanceTolerancePaise: 99}.Parse(text)
 }
 
 // Statement is one parsed statement: its summary, its lines and whether they
