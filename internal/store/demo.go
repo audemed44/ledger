@@ -50,6 +50,6 @@ func (s *Store) SeedDemo() error {
 	}
 	_, err = s.Ingest([]byte("From: notices@example.invalid\r\nSubject: A new alert format\r\n" +
 		"Message-ID: <demo-unmatched@ledger.invalid>\r\nContent-Type: text/plain\r\n\r\n" +
-		"Your card 8080 was debited INR 450.00 at EXAMPLE SHOP.\n"))
+		"Your card 8080 was debited INR 450.00 at EXAMPLE SHOP on 02-Oct-2026.\n"))
 	return err
 }

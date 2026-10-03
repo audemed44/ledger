@@ -12,9 +12,10 @@ binary that idles at about 11 MB of RAM.
   never moves, deletes or marks mail read. Every email is archived intact,
   attachments included, before anything else happens, and each is processed
   once however often it's fetched.
-- **Alert parsers**: one per alert format, defined in the app against a
-  real email from your inbox, with a live preview. Saving one retries the
-  whole backlog. Exportable as YAML.
+- **Alert parsers**: one per alert format. Open an email from your inbox,
+  select the amount, merchant, card and date, and Ledger writes the pattern
+  and date format, with a live preview. Saving one retries the whole
+  backlog. Exportable as YAML.
 - **PDF statements**: decrypted with passwords from the environment,
   extracted with `pdftotext`, and parsed by an issuer-specific layout. Rows
   must add up to the statement's summary before anything can be imported.

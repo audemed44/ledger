@@ -15,7 +15,10 @@ email archived intact under `/data/archive`.
   money in integer minor units.
 - `internal/mail`: MIME decoding: text (HTML made inert), attachments, PDFs.
 - `internal/gmail`: the IMAP poller: one label, read-only, UID cursor.
-- `internal/alerts`: alert parsers (sender + subject + named-group regex).
+- `internal/alerts`: alert parsers (sender + subject + named-group regex),
+  and writing that regex from fields tagged in an example email.
+- `internal/pattern`: loose literal patterns from example text (numbers
+  and month names vary), for parser subjects and statement triggers.
 - `internal/statements`: PDF extraction (qpdf, pdftotext) and the
   issuer-specific statement layouts.
 - `internal/store`: the database and archive: ingest, processing, parsers,

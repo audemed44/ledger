@@ -229,3 +229,26 @@ func TestSummaryShape(t *testing.T) {
 		t.Fatal(w.Body.String())
 	}
 }
+
+func TestParserFromExample(t *testing.T) {
+	h := (&Server{Store: testStore(t), Token: "1234"}).Handler()
+	call := func(body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/api/parsers/from-example", strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer 1234")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	// "INR 1,234.56 at Example Shop card 4242 on 2026-10-01"
+	w := call(`{"subject":"Alert","body":` + fmt.Sprintf("%q", fixture.AlertBody) + `,"marks":[
+		{"field":"amount","start":4,"end":12},{"field":"merchant","start":16,"end":28},
+		{"field":"account","start":34,"end":38},{"field":"date","start":42,"end":52}]}`)
+	var got struct{ Pattern, DateLayout, Subject string }
+	json.Unmarshal(w.Body.Bytes(), &got)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"date_layout":"2006-1-2"`) || got.Subject != "(?i)^Alert$" {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w = call(`{"body":"x","marks":[{"field":"amount","start":0,"end":1}]}`); w.Code != 422 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+}

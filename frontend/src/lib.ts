@@ -28,7 +28,12 @@ export const blankParser: Parser = {
   direction: "debit",
   enabled: true,
 };
-export const samplePattern = String.raw`(?s)Amount: (?P<currency>[A-Z]{3}) (?P<amount>[\d,.]+)\nMerchant: (?P<merchant>[^\n]+)\nCard: (?P<account>\d{4})\nDate: (?P<date>[^\n]+)\nReference: (?P<reference>[^\n]+)`;
+// A synthetic alert for trying the parser editor without real mail.
+export const syntheticAlert = {
+  sender: "alerts@example.invalid",
+  subject: "Purchase alert",
+  body: "Amount: INR 1290.00\nMerchant: Example Store\nCard: 4242\nDate: 2026-10-01\nReference: EXAMPLE-001\n",
+};
 export const newStatementParser: StatementParser = {
   balance_tolerance_paise: 99,
   id: 0,
