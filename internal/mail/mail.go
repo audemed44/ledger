@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"regexp"
 	"strings"
 	"time"
 
@@ -53,6 +54,9 @@ func IsPDF(contentType, name string) bool {
 
 // Decode reads a raw message. Real plain text is preferred when there's an
 // HTML alternative.
+// bracketed finds an address in angle brackets.
+var bracketed = regexp.MustCompile(`<([^<>@\s]+@[^<>@\s]+)>`)
+
 func Decode(raw []byte) Message {
 	var m Message
 	reader, err := mail.CreateReader(bytes.NewReader(raw))
@@ -67,6 +71,11 @@ func Decode(raw []byte) Message {
 	m.Subject, _ = reader.Header.Subject()
 	if addrs, e := reader.Header.AddressList("From"); e == nil && len(addrs) == 1 {
 		m.Sender = addrs[0].Address
+	} else if found := bracketed.FindAllStringSubmatch(reader.Header.Get("From"), -1); len(found) == 1 {
+		// Some banks send a display name the strict parser refuses, such as
+		// an empty encoded word ("=?UTF-8?B??="); the address is still
+		// plain in angle brackets.
+		m.Sender = found[0][1]
 	}
 	if date, e := reader.Header.Date(); e == nil && !date.IsZero() {
 		m.Date = date.Format(time.RFC3339)
