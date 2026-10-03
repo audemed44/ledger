@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/pr
 import { afterEach, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { TransactionsPage } from "./components/TransactionsPage";
-import { money } from "./lib";
+import { money, periodRange, recentMonths } from "./lib";
 const summary = {
   totals: [],
   accounts: [],
@@ -128,4 +128,33 @@ it("marks a transaction as a transfer from its actions", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Actions for SWEEP TFR DR" }));
   fireEvent.click(screen.getByRole("button", { name: /Treat everything like “SWEEP TFR DR”/ }));
   await waitFor(() => expect(posts).toEqual(["/api/transactions/7/transfer-rule"]));
+});
+
+it("turns periods into date ranges", () => {
+  const today = new Date(2026, 9, 3); // 3 October 2026
+  expect(periodRange("this-month", today)).toEqual({ from: "2026-10-01", to: "2026-10-31" });
+  expect(periodRange("last-month", today)).toEqual({ from: "2026-09-01", to: "2026-09-30" });
+  expect(periodRange("months-3", today)).toEqual({ from: "2026-08-01", to: "2026-10-31" });
+  expect(periodRange("months-12", today)).toEqual({ from: "2025-11-01", to: "2026-10-31" });
+  expect(periodRange("this-year", today)).toEqual({ from: "2026-01-01", to: "2026-12-31" });
+  expect(periodRange("month-2026-02", today)).toEqual({ from: "2026-02-01", to: "2026-02-28" });
+  expect(periodRange("", today)).toEqual({ from: "", to: "" });
+  expect(recentMonths(2, today).map((m) => m.value)).toEqual(["month-2026-10", "month-2026-09"]);
+});
+
+it("filters transactions by a period from the menu", async () => {
+  const urls: string[] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    urls.push(String(url));
+    return reply([]);
+  });
+  render(<TransactionsPage summary={summary} version={0} />);
+  fireEvent.change(await screen.findByLabelText("Period"), { target: { value: "last-month" } });
+  const { from, to } = periodRange("last-month");
+  await waitFor(() =>
+    expect(urls.some((u) => u.includes(`from=${from}`) && u.includes(`to=${to}`))).toBe(true),
+  );
+  expect(screen.queryByLabelText("From date")).toBeNull();
+  fireEvent.change(screen.getByLabelText("Period"), { target: { value: "custom" } });
+  expect(screen.getByLabelText("From date")).toBeTruthy();
 });

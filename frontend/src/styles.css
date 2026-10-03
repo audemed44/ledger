@@ -1337,3 +1337,26 @@ label.btn.disabled {
   border-color: var(--accent);
   color: var(--accent-hi);
 }
+
+/* Custom dates sit on their own row under the filters. */
+.custom-dates {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 220px));
+  gap: 12px;
+}
+/* iOS gives date inputs an intrinsic width wider than a phone column. */
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  display: block;
+}
+@media (max-width: 680px) {
+  .custom-dates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}

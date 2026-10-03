@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { ArrowDownLeft, ArrowUpRight, Download, MoreHorizontal } from "lucide-preact";
 import { api } from "../api";
-import { dateLabel, money } from "../lib";
+import { dateLabel, money, periodRange, recentMonths } from "../lib";
 import type { Summary, Transaction } from "../types";
 import { Empty, ErrorNote, Field, Section } from "./ui";
 
@@ -13,6 +13,7 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
     [to, setTo] = useState(""),
     [status, setStatus] = useState(""),
     [kind, setKind] = useState(""),
+    [period, setPeriod] = useState(""),
     [actions, setActions] = useState(0),
     [offset, setOffset] = useState(0),
     [error, setError] = useState(""),
@@ -36,18 +37,20 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
       setError((e as Error).message);
     }
   }
+  // A period from the menu, or the custom dates.
+  const range = period === "custom" ? { from, to } : periodRange(period);
   const params = new URLSearchParams({
     search,
     account,
-    from,
-    to,
+    from: range.from,
+    to: range.to,
     status,
     kind,
     offset: String(offset),
   }).toString();
   useEffect(() => {
     setOffset(0);
-  }, [search, account, from, to, status, kind]);
+  }, [search, account, from, to, status, kind, period]);
   useEffect(() => {
     let current = true;
     setLoading(true);
@@ -99,21 +102,24 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
             ))}
           </select>
         </Field>
-        <Field label="From">
-          <input
-            aria-label="From date"
-            type="date"
-            value={from}
-            onInput={(e) => setFrom(e.currentTarget.value)}
-          />
-        </Field>
-        <Field label="To">
-          <input
-            aria-label="To date"
-            type="date"
-            value={to}
-            onInput={(e) => setTo(e.currentTarget.value)}
-          />
+        <Field label="Period">
+          <select value={period} onChange={(e) => setPeriod(e.currentTarget.value)}>
+            <option value="">All time</option>
+            <option value="this-month">This month</option>
+            <option value="last-month">Last month</option>
+            <option value="months-3">Last 3 months</option>
+            <option value="months-6">Last 6 months</option>
+            <option value="months-12">Last 12 months</option>
+            <option value="this-year">This year</option>
+            <optgroup label="Month">
+              {recentMonths(24).map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </optgroup>
+            <option value="custom">Custom dates…</option>
+          </select>
         </Field>
         <Field label="Status">
           <select value={status} onChange={(e) => setStatus(e.currentTarget.value)}>
@@ -131,6 +137,28 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
             <option value="transfers">Transfers between your accounts</option>
           </select>
         </Field>
+        {period === "custom" && (
+          <div class="custom-dates">
+            <Field label="From">
+              <input
+                aria-label="From date"
+                type="date"
+                value={from}
+                max={to || undefined}
+                onInput={(e) => setFrom(e.currentTarget.value)}
+              />
+            </Field>
+            <Field label="To">
+              <input
+                aria-label="To date"
+                type="date"
+                value={to}
+                min={from || undefined}
+                onInput={(e) => setTo(e.currentTarget.value)}
+              />
+            </Field>
+          </div>
+        )}
       </div>
       <ErrorNote error={error} />
       {/* Refreshes keep the rows on screen, so the page doesn't jump. */}
@@ -260,12 +288,12 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
       ) : (
         <Empty
           title={
-            search || account || from || to || status || kind
+            search || account || range.from || range.to || status || kind
               ? "No matching transactions"
               : "Your first alert starts the story."
           }
         >
-          {search || account || from || to || status || kind
+          {search || account || range.from || range.to || status || kind
             ? "Try widening your filters."
             : "Connect Gmail, then create a parser for your bank’s alerts. Transactions will appear here automatically."}
         </Empty>
