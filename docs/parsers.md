@@ -115,7 +115,12 @@ month names loosened. From then on, a statement email that fits a trigger
 is extracted, validated and imported as soon as it arrives (and saving
 triggers is picked up by **Retry backlog**). One that doesn't validate, or
 that no trigger or more than one trigger fits, stays in the inbox with the
-reason. Remove triggers by editing the parser.
+reason. Saving a trigger also imports the statements like it already
+waiting in the inbox, in the background. Remove triggers by editing the
+parser.
+
+A statement for a month with no transactions imports too, as long as its
+summary says nothing moved.
 
 ### Uploading a statement
 

@@ -146,6 +146,9 @@ func TestStatementImportAPIAndIdempotence(t *testing.T) {
 	if len(rows) != 0 {
 		t.Fatal("preview mutated transactions")
 	}
+	// Another card's statement waits in the inbox: saving the automatic
+	// import imports it too.
+	waiting, _ := s.Ingest(fixture.StatementMail("waiting", strings.ReplaceAll(fixture.Statement, "4242", "8080")))
 	body := fmt.Sprintf(`{"part":0,"parser_id":%d,"import":true,"automatic":true,"fingerprint":%q}`, p.ID, v.Fingerprint)
 	path := fmt.Sprintf("/api/messages/%d/pdf", id)
 	if w := call("POST", path, body, "", ""); w.Code != 401 {
@@ -163,8 +166,15 @@ func TestStatementImportAPIAndIdempotence(t *testing.T) {
 			t.Fatal(w.Code, w.Body.String())
 		}
 	}
+	for start := time.Now(); ; time.Sleep(50 * time.Millisecond) {
+		if m, _ := s.Message(waiting); m.State == "statement" {
+			break
+		} else if time.Since(start) > 15*time.Second {
+			t.Fatal("waiting statement not imported", m.Reason)
+		}
+	}
 	rows, _ = s.Transactions(store.Filter{})
-	if len(rows) != 3 {
+	if len(rows) != 6 {
 		t.Fatal("duplicate or missing rows", len(rows))
 	}
 	for _, r := range rows {
@@ -190,7 +200,7 @@ func TestStatementImportAPIAndIdempotence(t *testing.T) {
 		t.Fatal("resent statement duplicated", err)
 	}
 	rows, _ = s.Transactions(store.Filter{})
-	if len(rows) != 3 {
+	if len(rows) != 6 {
 		t.Fatal(len(rows))
 	}
 	// Deleting the parser never removes rows or statement provenance.
@@ -198,7 +208,7 @@ func TestStatementImportAPIAndIdempotence(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 	rows, _ = s.Transactions(store.Filter{})
-	if len(rows) != 3 {
+	if len(rows) != 6 {
 		t.Fatal("delete removed transactions")
 	}
 	if _, err = s.ArchivedRaw(id); err != nil {

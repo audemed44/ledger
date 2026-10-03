@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/audemed44/ledger/internal/statements"
@@ -165,6 +166,13 @@ func (s *Server) statementRoutes(mux *http.ServeMux) {
 					result.AutomaticError = err.Error()
 				} else {
 					result.Automatic = true
+					// Statements like it already waiting in the inbox import
+					// now, in the background.
+					go func() {
+						if _, err := s.Store.Reprocess(); err != nil {
+							slog.Warn("retrying the backlog after saving an automatic import", "err", err)
+						}
+					}()
 				}
 			}
 		}
