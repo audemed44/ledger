@@ -23,6 +23,11 @@ func TestStatementRowsBalanceAndCredits(t *testing.T) {
 		s.TotalDue != 95000 || s.DueDate != "2026-10-22" || s.Account != "4242" {
 		t.Fatalf("%+v", s)
 	}
+	for i, want := range []string{"EXAMPLE SHOP", "EXAMPLE GROCER", "CREDIT CARD PAYMENT (Ref# 123456)"} {
+		if s.Transactions[i].Merchant != want {
+			t.Errorf("%q, want %q", s.Transactions[i].Merchant, want)
+		}
+	}
 }
 
 func TestStatementRoundingIsFlagged(t *testing.T) {
@@ -129,5 +134,32 @@ func TestPDFPasswordTrials(t *testing.T) {
 	cancel()
 	if _, _, e = ExtractWithPasswords(cancelled, encrypted, []string{"fixture-two"}, 0); e == nil {
 		t.Fatal("ignored cancellation")
+	}
+}
+
+// HDFC's international table spaces its "date | time" column, marks EMI
+// eligibility, shows foreign amounts and reward points, and wraps fee
+// descriptions onto the lines around their rows.
+func TestStatementInternationalTable(t *testing.T) {
+	text := strings.NewReplacer("+ C550.00 + C0.00 = C950.00", "+ C650.00 + C0.00 = C1,050.00").Replace(statement) + `
+International Transactions
+DATE & TIME                              TRANSACTION DESCRIPTION                                                             REWARDS                     AMOUNT         PI
+
+                                         EXAMPLE PERSON                [CKYC ID : 00000000000000 ]
+
+21/09/2026 | 22:00             EMI       EXAMPLE GAMES STORE                                             USD 1.05            + 3                     C 90.00      l
+                                         IGST-VPS0000000000001-RATE 18.0 -09 (Ref#
+22/09/2026 | 00:00                                                                                                                                         C 10.00      l
+                                         MT000000000000000000001)
+`
+	s, err := ParseHDFC(text)
+	if err != nil || !s.Balanced || len(s.Transactions) != 5 {
+		t.Fatalf("%+v %v", s, err)
+	}
+	if got := s.Transactions[3]; got.Merchant != "EXAMPLE GAMES STORE" || got.Amount != 9000 || got.Direction != "debit" {
+		t.Fatalf("%+v", got)
+	}
+	if got := s.Transactions[4].Merchant; got != "IGST-VPS0000000000001-RATE 18.0 -09 (Ref# MT000000000000000000001)" {
+		t.Fatal(got)
 	}
 }

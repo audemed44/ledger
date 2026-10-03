@@ -13,7 +13,8 @@ import (
 // The HDFC credit card layout: a five-amount summary, then DATE & TIME
 // transaction rows. pdftotext extracts the ₹ glyph as "C".
 var (
-	hdfcRow      = regexp.MustCompile(`^\s*(\d{2}/\d{2}/\d{4})\|\s*(\d{2}:\d{2})\s+(.+?)\s{2,}(\+?)\s*[C₹]\s*([\d,]+\.\d{2})\s*[A-Za-z]?\s*$`)
+	hdfcRow      = regexp.MustCompile(`^\s*(\d{2}/\d{2}/\d{4})\s*\|\s*(\d{2}:\d{2})(.*?)\s{2,}(\+?)\s*[C₹]\s*([\d,]+\.\d{2})\s*[A-Za-z]?\s*$`)
+	hdfcGap      = regexp.MustCompile(`\s{3,}`)
 	hdfcDatedRow = regexp.MustCompile(`^\s*\d{2}/\d{2}/\d{4}`)
 	hdfcMoney    = regexp.MustCompile(`[C₹]\s*([\d,]+\.\d{2})`)
 	hdfcDate     = regexp.MustCompile(`\d{2} [A-Za-z]{3}, \d{4}`)
@@ -129,56 +130,81 @@ func ParseHDFCWithTolerance(text string, tolerance int64) (Statement, error) {
 		return s, errors.New("minimum payment and due date not found")
 	}
 
-	loc, _ := time.LoadLocation("Asia/Kolkata")
-	var debits, credits int64
+	// Each "TRANSACTION DESCRIPTION" header starts a table (domestic,
+	// international, one per page) with its own columns. A description sits
+	// in the header's column, may wrap onto the lines around its row, and
+	// can be followed by reward points or a foreign amount after a wide gap.
+	type table struct {
+		desc    int
+		rows    []int
+		onRow   []string
+		extra   map[int]string
+		matches [][]string
+	}
+	var tables []*table
 	var rowErrors []error
-	table := false
-	for i, line := range lines {
-		if strings.Contains(line, "TRANSACTION DESCRIPTION") && strings.Contains(line, "AMOUNT") {
-			table = true
+	for i, l := range lines {
+		if strings.Contains(l, "TRANSACTION DESCRIPTION") && strings.Contains(l, "AMOUNT") {
+			tables = append(tables, &table{desc: column(l, "TRANSACTION DESCRIPTION"), extra: map[int]string{}})
 			continue
 		}
-		if !hdfcDatedRow.MatchString(line) {
+		if len(tables) == 0 {
+			if hdfcDatedRow.MatchString(l) {
+				rowErrors = append(rowErrors, fmt.Errorf("dated row outside a recognised table on line %d", i+1))
+			}
 			continue
 		}
-		if !table {
-			rowErrors = append(rowErrors, fmt.Errorf("dated row outside a recognised table on line %d", i+1))
+		t := tables[len(tables)-1]
+		if !hdfcDatedRow.MatchString(l) {
+			if at := indent(l); at >= t.desc-1 && at <= t.desc+1 && !strings.Contains(l, "CKYC") {
+				t.extra[i] = strings.TrimSpace(hdfcGap.Split(strings.TrimSpace(l), 2)[0])
+			}
 			continue
 		}
-		m := hdfcRow.FindStringSubmatch(line)
-		if m == nil {
+		at := hdfcRow.FindStringSubmatchIndex(l)
+		if at == nil {
 			rowErrors = append(rowErrors, fmt.Errorf("unparsed transaction on line %d", i+1))
 			continue
 		}
-		date, e := time.ParseInLocation("02/01/2006 15:04", m[1]+" "+m[2], loc)
-		if e != nil {
-			rowErrors = append(rowErrors, fmt.Errorf("invalid date on line %d", i+1))
+		m := make([]string, len(at)/2)
+		for n := range m {
+			if at[2*n] >= 0 {
+				m[n] = l[at[2*n]:at[2*n+1]]
+			}
+		}
+		// The description: from its column (or the end of the time, when
+		// the header isn't aligned) to where the amount begins.
+		text := ""
+		from := max(t.desc, len([]rune(l[:at[5]])))
+		if r := []rune(l[:at[7]]); len(r) > from {
+			text = strings.TrimSpace(hdfcGap.Split(strings.TrimSpace(string(r[from:])), 2)[0])
+		}
+		t.rows, t.onRow, t.matches = append(t.rows, i), append(t.onRow, text), append(t.matches, m)
+	}
+	var debits, credits int64
+	for _, t := range tables {
+		if len(t.rows) == 0 {
 			continue
 		}
-		amount, e := ledger.MinorUnits(m[5])
-		if e != nil {
-			rowErrors = append(rowErrors, fmt.Errorf("invalid amount on line %d", i+1))
-			continue
+		merchants, err := wrapped(t.rows, t.extra, t.onRow, " ")
+		if err != nil {
+			return s, err
 		}
-		direction := "debit"
-		if m[4] == "+" {
-			direction = "credit"
-			credits += amount
-		} else {
-			debits += amount
+		for n, m := range t.matches {
+			date, e := dateIn("02/01/2006 15:04", m[1]+" "+m[2])
+			amount, e2 := ledger.MinorUnits(m[5])
+			if e != nil || e2 != nil {
+				rowErrors = append(rowErrors, fmt.Errorf("invalid date or amount on line %d", t.rows[n]+1))
+				continue
+			}
+			credit := m[4] == "+"
+			if credit {
+				credits += amount
+			} else {
+				debits += amount
+			}
+			line(&s, date, merchants[n], amount, credit, "")
 		}
-		s.Transactions = append(s.Transactions, ledger.Transaction{
-			Merchant:    strings.TrimSpace(m[3]),
-			Account:     s.Account,
-			Amount:      amount,
-			Currency:    "INR",
-			Direction:   direction,
-			Date:        date.Format(time.RFC3339),
-			Issuer:      s.Issuer,
-			AccountID:   s.AccountID,
-			AccountKind: s.AccountKind,
-			Status:      "flagged",
-		})
 	}
 	if len(s.Transactions) == 0 {
 		return s, errors.New("no statement transactions found")
