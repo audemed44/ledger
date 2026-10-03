@@ -231,12 +231,25 @@ func (s *Store) IgnoreLike(messageID int64) (alerts.Parser, error) {
 	if subject == "" {
 		subject = "^$"
 	}
+	// The issuer of another parser for this sender, for filtering by bank.
+	issuer := ""
+	parsers, err := s.Parsers()
+	if err != nil {
+		return alerts.Parser{}, err
+	}
+	for _, p := range parsers {
+		if strings.EqualFold(strings.TrimSpace(p.Sender), strings.TrimSpace(m.Sender)) && strings.TrimSpace(p.Issuer) != "" {
+			issuer = strings.TrimSpace(p.Issuer)
+			break
+		}
+	}
 	name := strings.TrimSpace(m.Subject)
 	if r := []rune(name); len(r) > 60 {
 		name = string(r[:60]) + "…"
 	}
 	return s.SaveParser(alerts.Parser{
 		Name:        "Ignore: " + name,
+		Issuer:      issuer,
 		AccountKind: "unknown",
 		Sender:      strings.ToLower(m.Sender),
 		Subject:     subject,

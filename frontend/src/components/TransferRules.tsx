@@ -19,7 +19,7 @@ export function TransferRules({ version, saved }: { version: number; saved: () =
   return (
     <section class="statement-section">
       <div class="section-head">
-        <span class="section-index">04</span>
+        <span class="section-index">05</span>
         <h2>Transfer rules</h2>
       </div>
       <p class="hint">

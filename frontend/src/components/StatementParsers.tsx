@@ -217,7 +217,7 @@ export function StatementParsers() {
   return (
     <section class="statement-section">
       <div class="section-head">
-        <span class="section-index">02</span>
+        <span class="section-index">03</span>
         <h2>PDF statement parsers</h2>
         <div class="spacer" />
         <button
