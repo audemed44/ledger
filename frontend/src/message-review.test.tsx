@@ -453,3 +453,41 @@ it("requests inbox filters from the server", async () => {
   expect(fetcher.mock.calls.some(([url]) => url === "/api/messages?kind=pdf")).toBe(true);
   expect(screen.queryByText("PDF statement")).toBeNull();
 });
+
+it("uploads a PDF statement from the inbox and opens it for review", async () => {
+  location.hash = "#inbox";
+  let sent: FormData | undefined;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
+    if (url === "/api/summary")
+      return reply({
+        totals: [],
+        accounts: [],
+        transactions: 0,
+        queued: 0,
+        parsers: 1,
+        month: "2026-10",
+        demo: false,
+      });
+    if (url === "/api/sync") return reply({ configured: true, running: false, label: "Bank" });
+    if (url === "/api/statements/upload") {
+      sent = options?.body as FormData;
+      return reply({ id: 9, state: "queued", message: "Saved to the Inbox for review" });
+    }
+    if (url === "/api/messages/9")
+      return reply({ ...message, id: 9, has_pdf: true, can_parse: false, attachments: [] });
+    if (url === "/api/statement-parsers") return reply([]);
+    if (url === "/api/pdf-config") return reply({ password_slots: [], adapters: [] });
+    return reply([]);
+  });
+  await act(async () => {
+    render(<App />);
+  });
+  const input = (await screen.findByText(/Upload PDF/)).querySelector("input")!;
+  const file = new File(["%PDF-1.4"], "statement.pdf", { type: "application/pdf" });
+  await act(async () => {
+    fireEvent.change(input, { target: { files: [file] } });
+  });
+  await screen.findByText("Saved to the Inbox for review");
+  expect((sent!.get("file") as File).name).toBe("statement.pdf");
+  await screen.findByText("Review and import the PDF");
+});

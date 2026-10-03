@@ -34,5 +34,11 @@ func (s *Server) widget(w http.ResponseWriter, r *http.Request) {
 		"items_layout": "list",
 		"items":        []any{},
 		"progress":     []any{},
+		// Foyer's Drop offers PDFs to Ledger, for statements banks only link to.
+		"accepts": map[string]any{
+			"url":   "/api/statements/upload",
+			"types": []string{".pdf", "application/pdf"},
+			"label": "Send to Ledger",
+		},
 	})
 }

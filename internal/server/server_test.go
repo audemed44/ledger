@@ -1,8 +1,10 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -256,5 +258,73 @@ func TestParserFromExample(t *testing.T) {
 	}
 	if w = call(`{"body":"x","marks":[{"field":"amount","start":0,"end":1}]}`); w.Code != 422 {
 		t.Fatal(w.Code, w.Body.String())
+	}
+}
+
+func TestStatementUpload(t *testing.T) {
+	fixture.RequirePDFTools(t)
+	s := testStore(t)
+	h := (&Server{Store: s, Token: "1234"}).Handler()
+	upload := func(name string, content []byte) (int, map[string]any) {
+		var body bytes.Buffer
+		form := multipart.NewWriter(&body)
+		part, _ := form.CreateFormFile("file", name)
+		part.Write(content)
+		form.Close()
+		r := httptest.NewRequest("POST", "/api/statements/upload", &body)
+		r.Header.Set("Content-Type", form.FormDataContentType())
+		r.Header.Set("Authorization", "Bearer 1234")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		var out map[string]any
+		json.Unmarshal(w.Body.Bytes(), &out)
+		return w.Code, out
+	}
+	if code, _ := upload("notes.txt", []byte("not a pdf")); code != 400 {
+		t.Fatal("non-PDF accepted", code)
+	}
+	pdf := fixture.PDF(fixture.Statement)
+	code, out := upload("../../Statement Oct.pdf", pdf)
+	if code != 200 || out["state"] != "queued" {
+		t.Fatal(code, out)
+	}
+	id := int64(out["id"].(float64))
+	m, _ := s.ReviewMessage(id)
+	if m.Sender != store.UploadSender || len(m.Attachments) != 1 || m.Attachments[0].Name != "Statement Oct.pdf" || !m.HasPDF {
+		t.Fatalf("%+v", m)
+	}
+	if code, again := upload("Statement Oct.pdf", pdf); code != 200 || again["id"] != out["id"] {
+		t.Fatal("same file filed twice", again)
+	}
+
+	// With an automatic import saved from it, the next upload imports itself.
+	p, _ := s.SaveStatementParser(statements.Parser{Name: "HDFC Credit Card Parser v1", Adapter: "hdfc-credit-card", BalanceTolerancePaise: 99})
+	if _, err := s.AddStatementTrigger(p.ID, id, 1); err != nil {
+		t.Fatal(err)
+	}
+	code, out = upload("Statement Nov.pdf", fixture.PDF(strings.ReplaceAll(fixture.Statement, "4242", "8080")))
+	if code != 200 || out["state"] != "statement" || out["message"] != "Statement imported" {
+		t.Fatal(code, out)
+	}
+	if rows, _ := s.Transactions(store.Filter{}); len(rows) != 3 {
+		t.Fatal(len(rows))
+	}
+}
+
+func TestWidgetAcceptsPDFsFromDrop(t *testing.T) {
+	h := (&Server{Store: testStore(t), Token: "1234"}).Handler()
+	r := httptest.NewRequest("GET", "/api/foyer/widget", nil)
+	r.Header.Set("Authorization", "Bearer 1234")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	var got struct {
+		Accepts struct {
+			URL   string   `json:"url"`
+			Types []string `json:"types"`
+		} `json:"accepts"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &got)
+	if got.Accepts.URL != "/api/statements/upload" || len(got.Accepts.Types) == 0 || got.Accepts.Types[0] != ".pdf" {
+		t.Fatal(w.Body.String())
 	}
 }

@@ -126,7 +126,9 @@ It exits 0 when the statement validates and 2 when it needs review.
 
 Add an **app** widget with URL `http://ledger:8080/api/foyer/widget` and
 `key` set to `LEDGER_TOKEN` (from Foyer's environment). It shows this
-month's debits per currency and how many emails need review.
+month's debits per currency and how many emails need review, and PDFs in
+Foyer's Drop get a **Send to Ledger** button: handy for statements a bank
+only emails as a download link.
 
 ## Development
 

@@ -1273,3 +1273,25 @@ footer a {
     max-height: 260px;
   }
 }
+
+/* A file input kept for its label, which is styled as a button. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+label.btn {
+  position: relative;
+  cursor: pointer;
+}
+label.btn:focus-within {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: 2px;
+}
+label.btn.disabled {
+  opacity: 0.5;
+  cursor: default;
+}

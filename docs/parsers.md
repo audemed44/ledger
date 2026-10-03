@@ -92,6 +92,40 @@ triggers is picked up by **Retry backlog**). One that doesn't validate, or
 that no trigger or more than one trigger fits, stays in the inbox with the
 reason. Remove triggers by editing the parser.
 
+### Uploading a statement
+
+Some banks email a link to a download page rather than the PDF. Download
+the statement, then choose **Upload PDF** in the inbox, or share it to
+Foyer's Drop and press **Send to Ledger**. The PDF is filed like an email
+from `uploads@ledger.invalid`, with the subject "Uploaded statement:" and
+its file name, and archived. Review and import it as usual; with
+**Import future statements like this automatically** ticked, later
+uploads with a similar file name import themselves. Uploading the same
+file again changes nothing. PDFs can be up to 18 MiB.
+
+The link emails themselves will wait in the inbox. To keep them out, make
+an alert parser for them with **Ignore** as the direction and, under
+Advanced, a body pattern of a phrase they contain.
+
+- **Passwords**: set `LEDGER_PDF_PASSWORDS=Password1|Password2|…` (up to
+  32; a password can't contain `|`). A parser tries all of them, or one
+  slot. Only the slot number is saved, so reordering the list changes what
+  a slot means. Unencrypted PDFs are always tried first.
+- **Validation**: every dated row in the transaction table must parse, and
+  the debit and credit rows must equal the summary's purchases and
+  payments exactly. The final balance may differ from the summary by up to
+  the parser's tolerance (0–99 paise, default 99) for rounding. Statements
+  with finance charges are flagged until reconciliation can handle them.
+  A statement that fails keeps the rows it could read, for diagnosis, and
+  can't be imported.
+- **One card per statement**: supplementary or ambiguous card numbers are
+  rejected rather than assigned to the primary card.
+- **No duplicates**: the same statement imported again, from the same
+  email or a resent one, changes nothing. A *different* statement for the
+  same account and date is refused.
+- Deleting a statement parser keeps its statements, transactions and
+  emails.
+
 ## Reconciliation
 
 Each statement line is matched to an alert transaction on the same account
