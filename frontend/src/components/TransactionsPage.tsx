@@ -14,7 +14,16 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
     [status, setStatus] = useState(""),
     [offset, setOffset] = useState(0),
     [error, setError] = useState(""),
-    [loading, setLoading] = useState(true);
+    [loading, setLoading] = useState(true),
+    [reload, setReload] = useState(0);
+  async function dismiss(t: Transaction, dismissed: boolean) {
+    try {
+      await api(`transactions/${t.id}/dismiss`, { dismissed });
+      setReload((n) => n + 1);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
   const params = new URLSearchParams({
     search,
     account,
@@ -50,7 +59,7 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
       current = false;
       clearTimeout(timer);
     };
-  }, [params, version]);
+  }, [params, version, reload]);
   return (
     <section>
       <Section index="01" title="Activity">
@@ -99,6 +108,7 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
             <option value="provisional">Provisional</option>
             <option value="confirmed">Confirmed</option>
             <option value="flagged">Flagged</option>
+            <option value="dismissed">Dismissed</option>
           </select>
         </Field>
       </div>
@@ -142,7 +152,32 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
                 {dateLabel(t.date)}
               </time>
               <div class="transaction-status">
-                <span class="chip">{t.status}</span>
+                <span
+                  class={"chip " + t.status}
+                  title={
+                    t.status === "flagged"
+                      ? "Not on the statement for its period"
+                      : t.matched
+                        ? "Alert and statement line matched"
+                        : undefined
+                  }
+                >
+                  {t.status}
+                  {t.matched ? " · matched" : ""}
+                </span>
+                {(t.status === "flagged" || t.status === "dismissed") && (
+                  <button
+                    class="text-link"
+                    onClick={() => dismiss(t, t.status === "flagged")}
+                    title={
+                      t.status === "flagged"
+                        ? "Not a real charge: leave it out of totals"
+                        : "Count it again"
+                    }
+                  >
+                    {t.status === "flagged" ? "Dismiss" : "Restore"}
+                  </button>
+                )}
               </div>
               <div class={"amount " + t.direction}>
                 {t.direction === "credit" ? "+" : "−"}
@@ -167,8 +202,8 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
       )}
       <div class="list-foot">
         <span class="hint">
-          {rows.length ? `${offset + 1}–${offset + rows.length} shown` : "No activity yet"} ·
-          Amounts are unconfirmed until matched to a statement.
+          {rows.length ? `${offset + 1}–${offset + rows.length} shown` : "No activity yet"} · Alerts
+          are provisional until a statement confirms them.
         </span>
         <div class="actions">
           {offset > 0 && (

@@ -10,9 +10,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"strings"
 
 	"github.com/audemed44/ledger/internal/ledger"
+	"github.com/audemed44/ledger/internal/pattern"
 )
 
 // Parser is a saved statement preset: a layout adapter plus which configured
@@ -23,6 +25,66 @@ type Parser struct {
 	Name                  string `json:"name"`
 	Adapter               string `json:"adapter"`
 	PasswordSlot          int    `json:"password_slot"` // 0 tries every password
+	// Triggers pick the statement emails this preset imports by itself.
+	Triggers []Trigger `json:"triggers"`
+}
+
+// Trigger matches a statement email from one exact sender, by subject and
+// attachment name regexes. A blank regex matches anything.
+type Trigger struct {
+	Sender   string `json:"sender"`
+	Subject  string `json:"subject"`
+	Filename string `json:"filename"`
+}
+
+// MaxTriggers is how many triggers one preset can have.
+const MaxTriggers = 20
+
+// TriggerFor is the trigger for statements like this email's attachment:
+// its sender, and its subject and file name with numbers and month names
+// loosened.
+func TriggerFor(sender, subject, filename string) Trigger {
+	return Trigger{
+		Sender:   strings.ToLower(strings.TrimSpace(sender)),
+		Subject:  pattern.Whole(subject),
+		Filename: pattern.Whole(filename),
+	}
+}
+
+// Validate checks a trigger before it's saved.
+func (t Trigger) Validate() error {
+	if !strings.Contains(t.Sender, "@") || len(t.Sender) > 320 {
+		return errors.New("An automatic import needs the exact sender address")
+	}
+	if len(t.Subject) > 2000 || len(t.Filename) > 2000 {
+		return errors.New("Automatic import pattern too long")
+	}
+	if _, err := regexp.Compile(t.Subject); err != nil {
+		return errors.New("Invalid subject pattern for automatic import")
+	}
+	if _, err := regexp.Compile(t.Filename); err != nil {
+		return errors.New("Invalid file name pattern for automatic import")
+	}
+	return nil
+}
+
+// Matches reports whether a PDF attachment of an email fits the trigger.
+func (t Trigger) Matches(sender, subject, filename string) bool {
+	if t.Validate() != nil || !strings.EqualFold(strings.TrimSpace(sender), t.Sender) {
+		return false
+	}
+	return regexp.MustCompile(t.Subject).MatchString(subject) &&
+		regexp.MustCompile(t.Filename).MatchString(filename)
+}
+
+// Matches reports whether any of the preset's triggers fit.
+func (p Parser) Matches(sender, subject, filename string) bool {
+	for _, t := range p.Triggers {
+		if t.Matches(sender, subject, filename) {
+			return true
+		}
+	}
+	return false
 }
 
 // Adapter is a supported statement layout.
@@ -55,6 +117,14 @@ func (p Parser) Validate() error {
 	}
 	if p.PasswordSlot < 0 || p.PasswordSlot > MaxPasswords {
 		return errors.New("Invalid password slot")
+	}
+	if len(p.Triggers) > MaxTriggers {
+		return errors.New("Too many automatic imports on one parser")
+	}
+	for _, t := range p.Triggers {
+		if err := t.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

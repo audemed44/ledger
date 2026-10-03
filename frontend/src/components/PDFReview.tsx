@@ -15,7 +15,8 @@ export function PDFReview({ message, imported }: { message: Message; imported?: 
     [editing, setEditing] = useState<StatementParser | null>(null),
     [result, setResult] = useState<PDFResult | null>(null),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [automatic, setAutomatic] = useState(true);
   useEffect(() => {
     let live = true;
     Promise.all([api<StatementParser[]>("statement-parsers"), api<PDFConfig>("pdf-config")])
@@ -176,39 +177,66 @@ export function PDFReview({ message, imported }: { message: Message; imported?: 
                       : "Balance check passed."
                     : `Flagged for review. Balance difference: ${money(result.statement.discrepancy, "INR")}.`}{" "}
                 {result.imported
-                  ? `${result.imported.already_imported ? "Already imported" : "Imported"}: ${result.imported.count} transactions. No duplicates added.`
+                  ? result.imported.already_imported
+                    ? `Already imported: ${result.imported.count} transactions. No duplicates added.`
+                    : `Imported: ${result.imported.count} transactions. ${result.imported.matched} confirmed an alert, ${result.imported.count - result.imported.matched} added from the statement` +
+                      (result.imported.flagged
+                        ? result.imported.flagged === 1
+                          ? ", and 1 alert in this period wasn’t on it and is flagged."
+                          : `, and ${result.imported.flagged} alerts in this period weren’t on it and are flagged.`
+                        : ".")
                   : "Preview only; nothing imported yet."}
               </div>
+              {result.imported && (result.automatic || result.automatic_error) && (
+                <p class={result.automatic_error ? "error-text" : "hint"} role="status">
+                  {result.automatic_error
+                    ? `Not set to import automatically: ${result.automatic_error}`
+                    : `${result.parser_name} will import statements like this one by itself.`}
+                </p>
+              )}
               {!!result.fingerprint &&
                 !result.parse_error &&
                 result.statement.balanced &&
                 !result.imported && (
-                  <button
-                    class="btn primary"
-                    disabled={busy}
-                    onClick={async () => {
-                      setBusy(true);
-                      setError("");
-                      try {
-                        const response = await api<PDFResult>(`messages/${message.id}/pdf`, {
-                          part,
-                          parser_id: parserID,
-                          import: true,
-                          fingerprint: result.fingerprint,
-                        });
-                        setResult(response);
-                        imported?.();
-                      } catch (e) {
-                        setError((e as Error).message);
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
-                  >
-                    {busy
-                      ? "Importing…"
-                      : `Import ${result.statement.transactions.length} transactions`}
-                  </button>
+                  <>
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        checked={automatic}
+                        disabled={busy}
+                        onChange={(e) => setAutomatic(e.currentTarget.checked)}
+                      />
+                      Import future statements like this automatically (same sender, a similar
+                      subject and file name)
+                    </label>
+                    <button
+                      class="btn primary"
+                      disabled={busy}
+                      onClick={async () => {
+                        setBusy(true);
+                        setError("");
+                        try {
+                          const response = await api<PDFResult>(`messages/${message.id}/pdf`, {
+                            part,
+                            parser_id: parserID,
+                            import: true,
+                            automatic,
+                            fingerprint: result.fingerprint,
+                          });
+                          setResult(response);
+                          imported?.();
+                        } catch (e) {
+                          setError((e as Error).message);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      {busy
+                        ? "Importing…"
+                        : `Import ${result.statement.transactions.length} transactions`}
+                    </button>
+                  </>
                 )}
               {!!result.statement.account &&
                 !!result.statement.date &&

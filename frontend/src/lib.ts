@@ -40,6 +40,7 @@ export const newStatementParser: StatementParser = {
   name: "HDFC Credit Card Parser v1",
   adapter: "hdfc-credit-card",
   password_slot: 0,
+  triggers: [],
 };
 export function passwordLabel(slot: number) {
   return slot ? `Password ${slot}` : "Try all configured passwords";

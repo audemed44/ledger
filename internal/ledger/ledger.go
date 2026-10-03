@@ -27,6 +27,8 @@ type Transaction struct {
 	Reference   string `json:"reference"`
 	Status      string `json:"status"`
 	Issuer      string `json:"issuer"`
+	// Matched is set when an alert and a statement line are both behind it.
+	Matched bool `json:"matched,omitempty"`
 }
 
 // Account is a card or bank account, identified by issuer, type and the last

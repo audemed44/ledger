@@ -34,6 +34,7 @@ func (s *Store) migrate() error {
 	for _, step := range []func() error{
 		s.migrateAccountKinds,
 		s.migrateStatementImports,
+		s.migrateAlertLinks,
 		s.mergeDuplicateStatementParsers,
 		s.retireBeforeBackfill,
 		s.recoverArchivedText,
@@ -48,7 +49,18 @@ func (s *Store) migrate() error {
 // migrateAccountKinds adds transactions.account_kind. Existing rows become
 // "unknown": a migration mustn't guess card or bank.
 func (s *Store) migrateAccountKinds() error {
-	rows, err := s.DB.Query("PRAGMA table_info(transactions)")
+	return s.addColumn("transactions", "account_kind", "TEXT NOT NULL DEFAULT 'unknown'")
+}
+
+// migrateAlertLinks adds transactions.alert_message_id: the alert email
+// matched to a statement line after the statement was imported.
+func (s *Store) migrateAlertLinks() error {
+	return s.addColumn("transactions", "alert_message_id", "INTEGER REFERENCES messages(id)")
+}
+
+// addColumn adds a column unless it exists. table and column are constants.
+func (s *Store) addColumn(table, column, definition string) error {
+	rows, err := s.DB.Query("PRAGMA table_info(" + table + ")")
 	if err != nil {
 		return err
 	}
@@ -61,7 +73,7 @@ func (s *Store) migrateAccountKinds() error {
 			rows.Close()
 			return err
 		}
-		if name == "account_kind" {
+		if name == column {
 			exists = true
 		}
 	}
@@ -70,7 +82,7 @@ func (s *Store) migrateAccountKinds() error {
 	if err != nil || exists {
 		return err
 	}
-	_, err = s.DB.Exec("ALTER TABLE transactions ADD COLUMN account_kind TEXT NOT NULL DEFAULT 'unknown'")
+	_, err = s.DB.Exec("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition)
 	return err
 }
 

@@ -1,6 +1,8 @@
 package store
 
 import (
+	"database/sql"
+
 	"github.com/audemed44/ledger/internal/ledger"
 )
 
@@ -16,7 +18,8 @@ const PageSize = 100
 
 // Transactions returns one page of matching transactions, newest first.
 func (s *Store) Transactions(f Filter) ([]ledger.Transaction, error) {
-	query := `SELECT id,message_id,merchant,account,amount,currency,direction,date,reference,status,issuer,account_kind
+	query := `SELECT id,message_id,merchant,account,amount,currency,direction,date,reference,status,issuer,account_kind,
+  (statement_id IS NOT NULL AND source_part<0) OR alert_message_id IS NOT NULL
 FROM transactions WHERE 1=1`
 	args := []any{}
 	if f.Search != "" {
@@ -56,7 +59,7 @@ FROM transactions WHERE 1=1`
 	for rows.Next() {
 		var t ledger.Transaction
 		err = rows.Scan(&t.ID, &t.MessageID, &t.Merchant, &t.Account, &t.Amount, &t.Currency,
-			&t.Direction, &t.Date, &t.Reference, &t.Status, &t.Issuer, &t.AccountKind)
+			&t.Direction, &t.Date, &t.Reference, &t.Status, &t.Issuer, &t.AccountKind, &t.Matched)
 		if err != nil {
 			return nil, err
 		}
@@ -94,11 +97,12 @@ type Total struct {
 }
 
 // MonthTotals sums transactions dated in month (YYYY-MM), per currency.
+// Dismissed ones don't count.
 func (s *Store) MonthTotals(month string) ([]Total, error) {
 	rows, err := s.DB.Query(`SELECT currency,
   SUM(CASE WHEN direction='debit' THEN amount ELSE 0 END),
   SUM(CASE WHEN direction='credit' THEN amount ELSE 0 END)
-FROM transactions WHERE substr(date,1,7)=? GROUP BY currency ORDER BY currency`, month)
+FROM transactions WHERE substr(date,1,7)=? AND status!='dismissed' GROUP BY currency ORDER BY currency`, month)
 	if err != nil {
 		return nil, err
 	}
@@ -129,4 +133,26 @@ func (s *Store) Counts() (Counts, error) {
   (SELECT count(*) FROM messages WHERE state='queued'),
   (SELECT count(*) FROM parsers)`).Scan(&c.Transactions, &c.Queued, &c.Parsers)
 	return c, err
+}
+
+// Dismiss sets a flagged transaction aside, as not a real charge (a
+// pre-authorisation that settled differently, say), or restores it. Totals
+// leave dismissed transactions out; a later statement line can still
+// confirm one.
+func (s *Store) Dismiss(id int64, dismiss bool) error {
+	from, to := "flagged", "dismissed"
+	if !dismiss {
+		from, to = to, from
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, err := s.DB.Exec("UPDATE transactions SET status=? WHERE id=? AND status=?", to, id, from)
+	if err != nil {
+		return err
+	}
+	n, err := r.RowsAffected()
+	if err == nil && n == 0 {
+		return sql.ErrNoRows
+	}
+	return err
 }

@@ -54,7 +54,8 @@ func TestAPIAuthOriginAndCSV(t *testing.T) {
 
 func TestPDFConfigNeverExposesPasswords(t *testing.T) {
 	s := testStore(t)
-	server := &Server{Store: s, Token: "test-token", PDFPasswords: []string{"secret-one", "secret-two"}}
+	s.PDFPasswords = []string{"secret-one", "secret-two"}
+	server := &Server{Store: s, Token: "test-token"}
 	h := server.Handler()
 	request := func(method, path, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -143,7 +144,7 @@ func TestStatementImportAPIAndIdempotence(t *testing.T) {
 	if len(rows) != 0 {
 		t.Fatal("preview mutated transactions")
 	}
-	body := fmt.Sprintf(`{"part":0,"parser_id":%d,"import":true,"fingerprint":%q}`, p.ID, v.Fingerprint)
+	body := fmt.Sprintf(`{"part":0,"parser_id":%d,"import":true,"automatic":true,"fingerprint":%q}`, p.ID, v.Fingerprint)
 	path := fmt.Sprintf("/api/messages/%d/pdf", id)
 	if w := call("POST", path, body, "", ""); w.Code != 401 {
 		t.Fatal("unauthenticated import", w.Code)
@@ -155,7 +156,8 @@ func TestStatementImportAPIAndIdempotence(t *testing.T) {
 		t.Fatal("stale preview accepted")
 	}
 	for i := 0; i < 2; i++ {
-		if w := call("POST", path, body, "1234", ""); w.Code != 200 {
+		w := call("POST", path, body, "1234", "")
+		if w.Code != 200 || !strings.Contains(w.Body.String(), `"automatic":true`) {
 			t.Fatal(w.Code, w.Body.String())
 		}
 	}
@@ -172,9 +174,13 @@ func TestStatementImportAPIAndIdempotence(t *testing.T) {
 	if m.State != "statement" {
 		t.Fatal("import still in queue", m.State)
 	}
+	// The saved automatic import takes the resent copy out of the inbox.
 	id2, err := s.Ingest(fixture.StatementMail("resent", fixture.Statement))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if m, _ := s.Message(id2); m.State != "statement" {
+		t.Fatal("resent statement not imported automatically", m.Reason)
 	}
 	v2 := preview(id2)
 	out, err := s.ImportStatement(id2, 0, v2, v2.Fingerprint)

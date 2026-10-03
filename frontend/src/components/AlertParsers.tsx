@@ -53,8 +53,8 @@ export function AlertParsers({ version, edit }: { version: number; edit: (p: Par
       <div class="notice">
         <BookOpen size={18} />
         <span>
-          Alert parsers record provisional transactions. Matching them to statement lines is coming
-          next.
+          Alert parsers record provisional transactions. Importing a statement confirms the ones it
+          contains and flags the ones it doesn’t.
         </span>
       </div>
     </section>

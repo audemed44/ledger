@@ -64,6 +64,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+	db.PDFPasswords = strings.Split(os.Getenv("LEDGER_PDF_PASSWORDS"), "|")
 
 	cfg := gmail.Config{
 		User:     os.Getenv("GMAIL_USER"),
@@ -91,7 +92,6 @@ func main() {
 		SecureCookies: env("LEDGER_SECURE_COOKIES", "true") == "true",
 		Demo:          *demo,
 		Files:         dist,
-		PDFPasswords:  strings.Split(os.Getenv("LEDGER_PDF_PASSWORDS"), "|"),
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

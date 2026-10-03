@@ -23,9 +23,13 @@ const BeforeBackfillReason = "Before 1 January 2026 backfill start"
 type Store struct {
 	DB  *sql.DB
 	Dir string
+	// PDFPasswords are the LEDGER_PDF_PASSWORDS slots, kept in memory only.
+	PDFPasswords []string
 	// mu serialises writes that read then update, such as processing a
 	// message or importing a statement.
 	mu sync.Mutex
+	// pdf runs one PDF extraction at a time, to bound memory and CPU.
+	pdf sync.Mutex
 }
 
 // Open opens (creating and upgrading as needed) the store in dir.

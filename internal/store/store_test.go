@@ -224,14 +224,14 @@ func TestStatementUpgradePreservesExistingTransactions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = s.migrateStatementImports(); err != nil {
+	if err = s.migrate(); err != nil {
 		t.Fatal(err)
 	}
 	after, err := s.Transactions(Filter{})
 	if err != nil || len(after) != 1 || after[0] != before[0] || after[0].MessageID != id {
 		t.Fatal("upgrade altered alert", after, err)
 	}
-	if err = s.migrateStatementImports(); err != nil {
+	if err = s.migrate(); err != nil {
 		t.Fatal("migration not repeatable", err)
 	}
 	var foreignKeyError string
@@ -570,18 +570,27 @@ func TestStatementImportValidationOverlapAndMultipleAttachments(t *testing.T) {
 	if len(rows) != 6 {
 		t.Fatal("multiple attachments missing", len(rows))
 	}
-	// Late alerts that could duplicate statement rows remain queued.
+	// A late alert confirms its statement line instead of adding another.
 	p := fixture.AlertParser()
 	p.Issuer = "HDFC"
 	p.AccountKind = "card"
 	s.SaveParser(p)
-	alert, err := s.Ingest(fixture.Mail("late-alert", "INR 500.00 at EXAMPLE SHOP card 4242 on 2026-10-01"))
+	alert, err := s.Ingest(fixture.Mail("late-alert", "INR 500.00 at Example Shop card 4242 on 2026-10-02"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	m, _ = s.Message(alert)
-	if m.State != "queued" || !strings.Contains(m.Reason, "reconciliation") {
-		t.Fatal("late alert double counted", m)
+	rows, _ = s.Transactions(Filter{Search: "EXAMPLE SHOP", Account: ledger.AccountKey("HDFC", "card", "4242")})
+	if m.State != "parsed" || len(rows) != 1 || !rows[0].Matched || rows[0].Status != "confirmed" {
+		t.Fatal("late alert not matched", m, rows)
+	}
+	if all, _ := s.Transactions(Filter{}); len(all) != 6 {
+		t.Fatal("late alert double counted", len(all))
+	}
+	// A second alert for the same purchase has no line left to confirm.
+	s.Ingest(fixture.Mail("late-again", "INR 500.00 at Example Shop card 4242 on 2026-10-02"))
+	if all, _ := s.Transactions(Filter{}); len(all) != 7 {
+		t.Fatal("second alert lost", len(all))
 	}
 	// Different content for the same account/date cannot overwrite the import.
 	revision := valid
@@ -591,29 +600,155 @@ func TestStatementImportValidationOverlapAndMultipleAttachments(t *testing.T) {
 	}
 }
 
-func TestStatementImportBlocksEarlierAlertsAtomically(t *testing.T) {
+func TestStatementImportReconcilesAlerts(t *testing.T) {
 	s := testStore(t)
 	p := fixture.AlertParser()
 	p.Issuer = "HDFC"
 	p.AccountKind = "card"
 	s.SaveParser(p)
-	s.Ingest(fixture.Mail("earlier", "INR 50.00 at DIFFERENT DESCRIPTION card 4242 on 2026-10-01"))
-	id, err := s.Ingest(fixture.StatementMail("overlap", fixture.Statement))
+	alert := func(key, amount, date string) {
+		t.Helper()
+		if _, err := s.Ingest(fixture.Mail(key, "INR "+amount+" at Alert Name card 4242 on "+date)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	alert("on-statement", "50.00", "2026-09-29")  // the grocer line, posted two days later
+	alert("missing", "77.00", "2026-09-20")       // in the period, not on the statement
+	alert("still-posting", "99.00", "2026-10-01") // too recent to be missing
+	alert("older", "88.00", "2026-08-01")         // before the period
+	other := fixture.AlertParser()
+	other.Name, other.Issuer, other.AccountKind, other.Sender = "Other", "ICICI", "card", "icici@example.invalid"
+	s.SaveParser(other)
+	raw := strings.ReplaceAll(string(fixture.Mail("other-bank", "INR 500.00 at Shop card 4242 on 2026-10-01")), "alerts@example.invalid", other.Sender)
+	s.Ingest([]byte(raw)) // same suffix and amount, different issuer
+
+	id, err := s.Ingest(fixture.StatementMail("statement", fixture.Statement))
 	if err != nil {
 		t.Fatal(err)
 	}
 	st, _ := statements.ParseHDFC(fixture.Statement)
-	if _, err = s.ImportStatement(id, 0, PDFPreview{Statement: &st}, statements.Fingerprint(st)); err == nil {
-		t.Fatal("overlapping statement accepted")
+	out, err := s.ImportStatement(id, 0, PDFPreview{Statement: &st}, statements.Fingerprint(st))
+	if err != nil || out.Matched != 1 || out.Flagged != 1 || out.Count != 3 {
+		t.Fatalf("%+v %v", out, err)
 	}
+	status := map[string]string{}
 	rows, _ := s.Transactions(Filter{})
-	if len(rows) != 1 {
-		t.Fatal("partially imported", len(rows))
+	for _, r := range rows {
+		status[r.Issuer+" "+ledger.Decimal(r.Amount)+" "+r.Merchant] = r.Status
 	}
-	var count int
-	s.DB.QueryRow("SELECT count(*) FROM statements").Scan(&count)
-	if count != 0 {
-		t.Fatal("partial statement persisted")
+	want := map[string]string{
+		"HDFC 50.00 Alert Name":                         "confirmed", // keeps the alert's name
+		"HDFC 77.00 Alert Name":                         "flagged",
+		"HDFC 99.00 Alert Name":                         "provisional",
+		"HDFC 88.00 Alert Name":                         "provisional",
+		"HDFC 500.00 EXAMPLE SHOP":                      "confirmed",
+		"HDFC 600.00 CREDIT CARD PAYMENT (Ref# 123456)": "confirmed",
+		"ICICI 500.00 Shop":                             "provisional",
+	}
+	if len(rows) != len(want) {
+		t.Fatal(status)
+	}
+	for k, v := range want {
+		if status[k] != v {
+			t.Errorf("%s: %s, want %s", k, status[k], v)
+		}
+	}
+
+	// A flagged alert can be dismissed out of the totals, and restored.
+	flagged, _ := s.Transactions(Filter{Status: "flagged"})
+	totals, _ := s.MonthTotals("2026-09")
+	if err = s.Dismiss(flagged[0].ID, true); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := s.MonthTotals("2026-09")
+	if after[0].Debit != totals[0].Debit-7700 {
+		t.Fatal("dismissed transaction still counted", totals, after)
+	}
+	if s.Dismiss(rows[0].ID, true) == nil && rows[0].Status != "flagged" {
+		t.Fatal("dismissed a transaction that wasn't flagged")
+	}
+	if err = s.Dismiss(flagged[0].ID, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// The next statement confirms the alert that was still posting, and
+	// importing the first again changes nothing.
+	next := strings.NewReplacer("02 Oct, 2026", "02 Nov, 2026", "22 Oct, 2026", "22 Nov, 2026",
+		"C 50.00", "C 99.00", "C950.00", "C999.00", "+ C550.00", "+ C599.00").Replace(fixture.Statement)
+	st2, err := statements.ParseHDFC(next)
+	if err != nil || !st2.Balanced {
+		t.Fatal(err, st2.Discrepancy)
+	}
+	id2, _ := s.Ingest(fixture.StatementMail("next", next))
+	if out, err = s.ImportStatement(id2, 0, PDFPreview{Statement: &st2}, statements.Fingerprint(st2)); err != nil || out.Matched != 1 {
+		t.Fatalf("%+v %v", out, err)
+	}
+	if out, err = s.ImportStatement(id, 0, PDFPreview{Statement: &st}, statements.Fingerprint(st)); err != nil || !out.AlreadyImported {
+		t.Fatal("re-import changed something", err)
+	}
+	if all, _ := s.Transactions(Filter{}); len(all) != 9 {
+		t.Fatal(len(all))
+	}
+	if left, _ := s.Transactions(Filter{Status: "provisional"}); len(left) != 2 {
+		t.Fatal("late-posting alert not confirmed", left)
+	}
+	if left, _ := s.Transactions(Filter{Status: "flagged"}); len(left) != 1 {
+		t.Fatal("missing alert no longer flagged", left)
+	}
+}
+
+func TestAutomaticStatementImport(t *testing.T) {
+	fixture.RequirePDFTools(t)
+	s := testStore(t)
+	p, err := s.SaveStatementParser(statements.Parser{Name: "HDFC Credit Card Parser v1", Adapter: "hdfc-credit-card", BalanceTolerancePaise: 99})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, _ := s.SaveStatementParser(statements.Parser{Name: "Second", Adapter: "hdfc-credit-card"})
+	// No automatic imports yet: statements wait for review.
+	first, _ := s.Ingest(fixture.StatementMail("first", fixture.Statement))
+	if m, _ := s.Message(first); m.State != "queued" {
+		t.Fatal(m.State)
+	}
+	if _, err = s.AddStatementTrigger(p.ID, first, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.AddStatementTrigger(p.ID, first, 0); err != nil {
+		t.Fatal("adding the same trigger again", err)
+	}
+	if _, err = s.AddStatementTrigger(other.ID, first, 0); err == nil {
+		t.Fatal("two parsers would import the same statement")
+	}
+	saved, _ := s.StatementParsers()
+	if len(saved[0].Triggers) != 1 || saved[0].Triggers[0].Sender != "statements@example.invalid" {
+		t.Fatalf("%+v", saved[0])
+	}
+
+	// Retrying the backlog imports the first; new mail imports itself.
+	if _, err = s.Reprocess(); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := s.Message(first); m.State != "statement" {
+		t.Fatal("backlog not imported", m.Reason)
+	}
+	next := strings.NewReplacer("4242", "8080").Replace(fixture.Statement)
+	id, _ := s.Ingest(fixture.StatementMail("next", next))
+	if m, _ := s.Message(id); m.State != "statement" {
+		t.Fatal("new statement not imported", m.Reason)
+	}
+	if rows, _ := s.Transactions(Filter{}); len(rows) != 6 {
+		t.Fatal(len(rows))
+	}
+
+	// Unbalanced, and from another sender: both wait with a reason.
+	broken, _ := s.Ingest(fixture.StatementMail("broken", strings.Replace(next, "C 50.00", "C 51.00", 1)))
+	if m, _ := s.Message(broken); m.State != "queued" || !strings.Contains(m.Reason, "automatic import with HDFC Credit Card Parser v1 failed") {
+		t.Fatal(m.State, m.Reason)
+	}
+	raw := strings.Replace(string(fixture.StatementMail("stranger", next)), "statements@example.invalid", "other@example.invalid", 1)
+	stranger, _ := s.Ingest([]byte(raw))
+	if m, _ := s.Message(stranger); m.State != "queued" || !strings.Contains(m.Reason, "no statement parser imports this automatically") {
+		t.Fatal(m.State, m.Reason)
 	}
 }
 

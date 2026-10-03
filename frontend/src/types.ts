@@ -27,6 +27,7 @@ export type Transaction = {
   reference: string;
   status: string;
   issuer: string;
+  matched?: boolean;
 };
 export type Message = {
   id: number;
@@ -70,7 +71,9 @@ export type StatementParser = {
   name: string;
   adapter: string;
   password_slot: number;
+  triggers?: Trigger[];
 };
+export type Trigger = { sender: string; subject: string; filename: string };
 export type Mark = { field: string; start: number; end: number };
 export type Example = { pattern: string; date_layout?: string; subject: string };
 export type PDFConfig = {
@@ -79,7 +82,15 @@ export type PDFConfig = {
 };
 export type PDFResult = {
   fingerprint?: string;
-  imported?: { statement_id: number; count: number; already_imported: boolean };
+  imported?: {
+    statement_id: number;
+    count: number;
+    matched: number;
+    flagged: number;
+    already_imported: boolean;
+  };
+  automatic?: boolean;
+  automatic_error?: string;
   text: string;
   password_slot: number;
   parser_name?: string;

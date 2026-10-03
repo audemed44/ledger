@@ -66,7 +66,8 @@ Date layouts are Go's: `02-Jan-2006`, `2006-01-02`, `02/01/2006 15:04`.
 - **Export YAML** downloads every alert parser, for backups or version
   control.
 
-Alert transactions are **provisional** until a statement confirms them.
+Alert transactions are **provisional** until a statement confirms them
+(see [Reconciliation](#reconciliation)).
 
 ## Statement parsers
 
@@ -79,6 +80,17 @@ and due dates, totals, every row and the extracted text.
 **Import transactions** appears only when the statement validated. The
 import re-reads the PDF on the server and saves every row at once, as
 confirmed transactions, with the statement's summary.
+
+### Automatic import
+
+Leave **Import future statements like this automatically** ticked when you
+import a statement by hand, and the parser saves a trigger: the email's
+exact sender, plus its subject and the PDF's file name with numbers and
+month names loosened. From then on, a statement email that fits a trigger
+is extracted, validated and imported as soon as it arrives (and saving
+triggers is picked up by **Retry backlog**). One that doesn't validate, or
+that no trigger or more than one trigger fits, stays in the inbox with the
+reason. Remove triggers by editing the parser.
 
 - **Passwords**: set `LEDGER_PDF_PASSWORDS=Password1|Password2|…` (up to
   32; a password can't contain `|`). A parser tries all of them, or one
@@ -95,14 +107,37 @@ confirmed transactions, with the statement's summary.
   rejected rather than assigned to the primary card.
 - **No duplicates**: the same statement imported again, from the same
   email or a resent one, changes nothing. A *different* statement for the
-  same account and date is refused. So is a statement with a row that
-  might duplicate an existing alert transaction, and an alert that arrives
-  after its statement stays in the inbox: matching the two is
-  reconciliation's job, which hasn't landed yet.
+  same account and date is refused.
 - Deleting a statement parser keeps its statements, transactions and
   emails.
 
-### Supported layouts
+## Reconciliation
+
+Each statement line is matched to an alert transaction on the same account
+(issuer, card or bank, last four digits) with the same amount, currency and
+direction, dated up to 3 days apart; an equal reference wins a tie. A match
+confirms the alert transaction, which keeps its own merchant name and date.
+Lines with no alert (fees, cashback, missed alerts) are added, confirmed.
+
+Alerts on that account that the statement doesn't contain are **flagged**,
+if they're from its period: since 3 days before the account's previous
+statement, or 28 days back for the first one, up to 3 days before the
+statement date. Alerts from those last 3 days may still be posting, so
+they stay provisional for the next statement. A flagged alert that a
+later statement contains is confirmed then.
+
+A flagged alert is usually a pre-authorisation that settled for a
+different amount, or a charge that was reversed. **Dismiss** it to leave it
+out of the totals; **Restore** brings it back.
+
+An alert that arrives after its statement was imported confirms the
+statement line instead of adding another transaction.
+
+Not handled yet: refunds linked to their charge, foreign currency markup
+lines, EMI conversions, and card payments paired with the bank debit as a
+transfer.
+
+## Supported layouts
 
 - **HDFC Credit Card Parser v1**: the HDFC credit card summary and dated
   transaction table. It works on the Tata Neu and Regalia layouts; the ₹
