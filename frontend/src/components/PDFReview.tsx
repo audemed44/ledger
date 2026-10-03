@@ -191,7 +191,7 @@ export function PDFReview({ message, imported }: { message: Message; imported?: 
                 <p class={result.automatic_error ? "error-text" : "hint"} role="status">
                   {result.automatic_error
                     ? `Not set to import automatically: ${result.automatic_error}`
-                    : `${result.parser_name} will import statements like this one by itself.`}
+                    : `${result.parser_name} will import statements like this one by itself. Any already waiting in the inbox are being imported now.`}
                 </p>
               )}
               {!!result.fingerprint &&
@@ -234,7 +234,9 @@ export function PDFReview({ message, imported }: { message: Message; imported?: 
                     >
                       {busy
                         ? "Importing…"
-                        : `Import ${result.statement.transactions.length} transactions`}
+                        : result.statement.transactions.length
+                          ? `Import ${result.statement.transactions.length} transactions`
+                          : "Import statement (no transactions this period)"}
                     </button>
                   </>
                 )}
