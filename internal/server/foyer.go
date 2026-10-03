@@ -23,8 +23,7 @@ func (s *Server) widget(w http.ResponseWriter, r *http.Request) {
 	for _, t := range out.Totals {
 		stats = append(stats, map[string]string{
 			"label":   "Debits this month",
-			"value":   ledger.Decimal(t.Debit),
-			"unit":    t.Currency,
+			"value":   ledger.Money(t.Debit, t.Currency),
 			"caption": "Excludes transfers between your accounts",
 		})
 	}
@@ -91,7 +90,7 @@ func dueStat(dues []store.Due) map[string]string {
 		total += d.Remaining
 		open++
 	}
-	stat := map[string]string{"label": "Card dues", "value": ledger.Decimal(total), "unit": "INR", "caption": "All paid", "tone": "good"}
+	stat := map[string]string{"label": "Card dues", "value": reminders.Rupees(total), "caption": "All paid", "tone": "good"}
 	if open > 0 {
 		stat["caption"] = "Next " + reminders.When(nearest)
 		stat["tone"] = "accent"

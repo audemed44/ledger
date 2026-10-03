@@ -253,7 +253,6 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
               <div class={"amount " + t.direction}>
                 {t.direction === "credit" ? "+" : "−"}
                 {money(t.amount, t.currency)}
-                <span class="hint">{t.currency}</span>
               </div>
               {actions === t.id && (
                 <div class="row-actions">

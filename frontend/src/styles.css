@@ -289,14 +289,6 @@ h1 {
   margin: 15px 0 9px;
   font-variant-numeric: tabular-nums;
 }
-.currency {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.03em;
-  font-weight: 400;
-  color: var(--fg-3);
-  margin-left: 12px;
-}
 .attention .figure-value {
   color: var(--accent-hi);
 }
@@ -973,9 +965,6 @@ footer a {
   }
   .login h1 {
     font-size: 53px;
-  }
-  .figure-value .currency {
-    font-size: 9px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

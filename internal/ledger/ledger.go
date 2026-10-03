@@ -83,6 +83,36 @@ func MinorUnits(value string) (int64, error) {
 // Decimal formats minor units as "1234.56".
 func Decimal(v int64) string { return fmt.Sprintf("%d.%02d", v/100, v%100) }
 
+// Money formats minor units for people, with the currency in front: rupees
+// as ₹1,23,456.78 (Indian digit grouping), other currencies as
+// "USD 123,456.78".
+func Money(v int64, currency string) string {
+	sign := ""
+	if v < 0 {
+		sign, v = "-", -v
+	}
+	whole := strconv.FormatInt(v/100, 10)
+	indian := currency == "" || strings.EqualFold(currency, "INR")
+	if len(whole) > 3 {
+		head, tail := whole[:len(whole)-3], whole[len(whole)-3:]
+		size := 3
+		if indian {
+			size = 2
+		}
+		groups := []string{tail}
+		for len(head) > size {
+			groups = append([]string{head[len(head)-size:]}, groups...)
+			head = head[:len(head)-size]
+		}
+		whole = strings.Join(append([]string{head}, groups...), ",")
+	}
+	symbol := "₹"
+	if !indian {
+		symbol = strings.ToUpper(currency) + " "
+	}
+	return fmt.Sprintf("%s%s%s.%02d", sign, symbol, whole, v%100)
+}
+
 // AccountKey is an account's identity, independent of parser names. Account
 // types and issuers are part of it, so a bank account and a card sharing a
 // suffix stay separate.

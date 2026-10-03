@@ -462,7 +462,7 @@ func TestWidgetListsCardDuesAndMarksThemPaid(t *testing.T) {
 	var got widget
 	json.Unmarshal(call("GET", "/api/foyer/widget").Body.Bytes(), &got)
 	if len(got.Items) != 1 || got.Items[0].Title != "Example Bank card ••4242" || got.Items[0].Caption != "₹12,345.00" ||
-		!strings.HasSuffix(got.Items[0].Subtitle, "in 2 days") || got.Stats[1]["label"] != "Card dues" || got.Stats[1]["tone"] != "warn" {
+		!strings.HasSuffix(got.Items[0].Subtitle, "in 2 days") || got.Stats[1]["label"] != "Card dues" || got.Stats[1]["value"] != "₹12,345.00" || got.Stats[1]["unit"] != "" || got.Stats[1]["tone"] != "warn" {
 		t.Fatalf("%+v", got)
 	}
 	if w := call("POST", got.Items[0].Action.URL); w.Code != 200 {

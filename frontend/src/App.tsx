@@ -209,10 +209,7 @@ export function App() {
                 <span class="eyebrow">Debits this month</span>
                 {summary.totals.length ? (
                   summary.totals.map((t) => (
-                    <div class="figure-value">
-                      {money(t.debit, t.currency)}
-                      <span class="currency">{t.currency}</span>
-                    </div>
+                    <div class="figure-value">{money(t.debit, t.currency)}</div>
                   ))
                 ) : (
                   <div class="figure-value">—</div>
