@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/audemed44/ledger/internal/ledger"
 	"github.com/audemed44/ledger/internal/store"
 )
 
@@ -169,24 +170,8 @@ func Message(d store.Due) (string, string) {
 	return title, strings.Join(lines, " ")
 }
 
-// Rupees formats minor units with Indian digit grouping: ₹1,23,456.78.
-func Rupees(v int64) string {
-	sign := ""
-	if v < 0 {
-		sign, v = "-", -v
-	}
-	whole := strconv.FormatInt(v/100, 10)
-	if len(whole) > 3 {
-		head, tail := whole[:len(whole)-3], whole[len(whole)-3:]
-		groups := []string{}
-		for len(head) > 2 {
-			groups = append([]string{head[len(head)-2:]}, groups...)
-			head = head[:len(head)-2]
-		}
-		whole = strings.Join(append(append([]string{head}, groups...), tail), ",")
-	}
-	return fmt.Sprintf("%s₹%s.%02d", sign, whole, v%100)
-}
+// Rupees formats minor units as ₹1,23,456.78.
+func Rupees(v int64) string { return ledger.Money(v, "INR") }
 
 // Send posts one notification in Apprise's JSON body.
 func (n *Notifier) Send(ctx context.Context, title, body, level string) error {

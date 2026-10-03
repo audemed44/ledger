@@ -31,3 +31,15 @@ func TestBankAndCardBalanceSigns(t *testing.T) {
 		t.Fatal("guessed account type")
 	}
 }
+
+func TestMoneyPutsTheCurrencyFirst(t *testing.T) {
+	for _, c := range []struct {
+		v        int64
+		currency string
+		want     string
+	}{{5, "INR", "₹0.05"}, {12345678, "INR", "₹1,23,456.78"}, {123456789012, "INR", "₹1,23,45,67,890.12"}, {-150000, "INR", "-₹1,500.00"}, {12345678, "usd", "USD 123,456.78"}, {99900, "USD", "USD 999.00"}} {
+		if got := Money(c.v, c.currency); got != c.want {
+			t.Errorf("%d %s: %s", c.v, c.currency, got)
+		}
+	}
+}

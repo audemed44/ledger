@@ -1,11 +1,25 @@
 import type { Parser, StatementParser } from "./types";
 
+// Minor units with the currency in front: rupees as ₹1,23,456.78 (Indian
+// digit grouping), other currencies as "USD 123,456.78". Built by hand so
+// the browser's locale can't change it; matches ledger.Money on the server.
 export function money(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-  }).format(amount / 100);
+  const indian = !currency || currency.toUpperCase() === "INR";
+  const sign = amount < 0 ? "-" : "";
+  const abs = Math.abs(Math.round(amount));
+  let whole = String(Math.floor(abs / 100));
+  if (whole.length > 3) {
+    const size = indian ? 2 : 3;
+    const groups = [whole.slice(-3)];
+    let head = whole.slice(0, -3);
+    while (head.length > size) {
+      groups.unshift(head.slice(-size));
+      head = head.slice(0, -size);
+    }
+    whole = [head, ...groups].join(",");
+  }
+  const symbol = indian ? "₹" : currency.toUpperCase() + " ";
+  return `${sign}${symbol}${whole}.${String(abs % 100).padStart(2, "0")}`;
 }
 export function dateLabel(value: string) {
   return new Date(value).toLocaleDateString("en-GB", {

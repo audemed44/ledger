@@ -80,6 +80,9 @@ it("shows an empty ledger rather than fabricated financial data", async () => {
 it("formats integer paise without dropping the fractional amount", () => {
   expect(money(123456, "INR")).toBe("₹1,234.56");
   expect(money(1, "INR")).toBe("₹0.01");
+  expect(money(12345678, "INR")).toBe("₹1,23,456.78");
+  expect(money(123456789012, "INR")).toBe("₹1,23,45,67,890.12");
+  expect(money(12345678, "USD")).toBe("USD 123,456.78");
 });
 it("keeps the transactions on screen while the ledger refreshes", async () => {
   vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
@@ -189,7 +192,11 @@ it("lists card dues and marks one paid", async () => {
   };
   render(
     <CardDues
-      summary={{ ...summary, dues: [due], reminders: { enabled: true, days: [0, 1, 5] } }}
+      summary={{
+        ...summary,
+        dues: [due],
+        reminders: { enabled: true, days: [0, 1, 5] },
+      }}
       saved={saved}
     />,
   );
