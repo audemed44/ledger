@@ -822,3 +822,37 @@ func TestSenderRecoveredOnOpen(t *testing.T) {
 		t.Fatal("recovered alert not parsed")
 	}
 }
+
+func TestIgnoreEmailsLikeThis(t *testing.T) {
+	s := testStore(t)
+	otp := func(key, code string) int64 {
+		raw := "From: Bank <otp@example.invalid>\r\nSubject: " + code + " is your OTP for card 4242\r\nMessage-ID: <" + key +
+			"@example.invalid>\r\nContent-Type: text/plain\r\n\r\nDo not share " + code
+		id, err := s.Ingest([]byte(raw))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	first, second := otp("a", "482913"), otp("b", "100200")
+	p, err := s.IgnoreLike(first)
+	if err != nil || p.Direction != "ignore" || p.Pattern != "" {
+		t.Fatalf("%+v %v", p, err)
+	}
+	s.Reprocess()
+	later := otp("c", "777777")
+	for _, id := range []int64{first, second, later} {
+		if m, _ := s.Message(id); m.State != "ignored" {
+			t.Fatal(id, m.State)
+		}
+	}
+	// Mail from the same sender with another subject still waits.
+	raw := "From: otp@example.invalid\r\nSubject: Your statement\r\nMessage-ID: <d@example.invalid>\r\n\r\nhello"
+	id, _ := s.Ingest([]byte(raw))
+	if m, _ := s.Message(id); m.State != "queued" {
+		t.Fatal(m.State)
+	}
+	if rows, _ := s.Transactions(Filter{}); len(rows) != 0 {
+		t.Fatal("ignored mail became transactions")
+	}
+}

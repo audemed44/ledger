@@ -61,17 +61,19 @@ func (p Parser) Validate() error {
 	if err != nil {
 		return fmt.Errorf("body pattern: %w", err)
 	}
-	if p.Pattern == "" {
-		return errors.New("body pattern is required")
-	}
 	if _, err = time.LoadLocation(p.Timezone); err != nil {
 		return errors.New("use an IANA timezone such as Asia/Kolkata")
 	}
 	if p.Direction != "debit" && p.Direction != "credit" && p.Direction != "ignore" {
 		return errors.New("direction must be debit, credit or ignore")
 	}
+	// An ignore rule without a body pattern ignores every email from the
+	// sender whose subject matches: OTPs, notices, statement links.
 	if p.Direction == "ignore" {
 		return nil
+	}
+	if p.Pattern == "" {
+		return errors.New("body pattern is required")
 	}
 	if !ledger.Currencies[p.Currency] {
 		return errors.New("select a supported two-decimal currency")
@@ -107,6 +109,9 @@ func (p Parser) Parse(sender, subject, body string) (Preview, error) {
 	fromSender := strings.EqualFold(strings.TrimSpace(sender), strings.TrimSpace(p.Sender))
 	if !fromSender || !regexp.MustCompile(p.Subject).MatchString(subject) {
 		return Preview{}, nil
+	}
+	if p.Pattern == "" {
+		return Preview{Matched: true, Ignored: true}, nil
 	}
 	re := regexp.MustCompile(p.Pattern)
 	matches := re.FindAllStringSubmatch(body, 2)

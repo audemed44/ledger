@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "preact/hooks";
-import { ArrowRight, FileText } from "lucide-preact";
+import { useEffect, useRef, useState } from "preact/hooks";
+import { ArrowRight, EyeOff, FileText } from "lucide-preact";
+import { api } from "../api";
 import { dateLabel } from "../lib";
 import type { Message } from "../types";
 import { PDFReview } from "./PDFReview";
@@ -16,6 +17,27 @@ export function MessageReview({
   imported?: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+  async function ignore() {
+    if (
+      !window.confirm(
+        `Ignore every email from ${message.sender} with a subject like “${message.subject}”? ` +
+          "Numbers and months in the subject may differ. They stay archived, and you can remove the rule under Parsers.",
+      )
+    )
+      return;
+    setBusy(true);
+    setError("");
+    try {
+      await api(`messages/${message.id}/ignore`, {});
+      imported?.();
+      close();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  }
   useEffect(() => {
     dialog.current?.showModal();
   }, []);
@@ -95,11 +117,21 @@ export function MessageReview({
         )}
       </div>
       <div class="dialog-foot">
+        {error && (
+          <p class="error-text" role="alert">
+            {error}
+          </p>
+        )}
         <p class="hint">
           {message.can_parse
             ? "Create a rule for this bank’s alert format. Preview it before importing transactions."
             : "Your original email remains safely archived on the server."}
         </p>
+        {message.sender && message.state === "queued" && (
+          <button class="btn" disabled={busy} onClick={ignore}>
+            <EyeOff size={15} /> Ignore emails like this
+          </button>
+        )}
         {message.can_parse && (
           <button class="btn primary" onClick={createParser}>
             Create alert parser <ArrowRight size={15} />
