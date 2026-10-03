@@ -95,8 +95,10 @@ func FromExample(subject, body string, marks []Mark) (Example, error) {
 	}
 	for i, s := range spans {
 		if i > 0 {
+			// A long gap keeps a few words at each end and skips the middle;
+			// one with few words (however much whitespace) stays whole.
 			gap := body[spans[i-1].end:s.start]
-			if utf8.RuneCountInString(gap) <= gapLimit {
+			if utf8.RuneCountInString(gap) <= gapLimit || len(strings.Fields(gap)) <= 2*context {
 				b.WriteString(pattern.Literal(gap))
 			} else {
 				b.WriteString(pattern.Literal(firstWords(gap, context)) + `[\s\S]*?` +
@@ -129,7 +131,10 @@ func FromExample(subject, body string, marks []Mark) (Example, error) {
 		return Example{}, errors.New("could not build a pattern from this selection")
 	}
 	found := re.FindAllStringSubmatch(body, 2)
-	if len(found) != 1 {
+	if len(found) == 0 {
+		return Example{}, errors.New("could not build a pattern that reads this email back; try tagging a slightly different span")
+	}
+	if len(found) > 1 {
 		return Example{}, errors.New("the pattern matches this email more than once; tag fields closer together")
 	}
 	for _, s := range spans {

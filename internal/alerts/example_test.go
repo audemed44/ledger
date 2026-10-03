@@ -119,3 +119,28 @@ func TestByteOffsetCountsUTF16(t *testing.T) {
 		}
 	}
 }
+
+// Axis-style HTML alerts put each value on its own line with a label, and
+// lots of whitespace between them. A long gap with few words stays whole,
+// so its words aren't required twice.
+func TestFromExampleWideGapsWithFewWords(t *testing.T) {
+	pad := "\n" + strings.Repeat("   \n", 30)
+	body := "Transaction Amount:" + pad + "INR 537" + pad + "Merchant Name:" + pad + "Example Store" + pad +
+		"Credit Card No." + pad + "XX4242" + pad + "Date & Time:" + pad + "01-10-2026, 20:01:18 IST\n"
+	got, err := FromExample("INR 537 spent on credit card no. XX4242", body, []Mark{
+		mark(t, body, "amount", "537"),
+		mark(t, body, "merchant", "Example Store"),
+		mark(t, body, "account", "4242"),
+		mark(t, body, "date", "01-10-2026"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := strings.NewReplacer("537", "1,581.20", "Example Store", "Other Shop", "01-10-2026", "02-11-2026").Replace(body)
+	p := Parser{Name: "Example", Sender: "a@example.invalid", Pattern: got.Pattern, DateLayout: got.DateLayout,
+		Timezone: "Asia/Kolkata", Currency: "INR", Direction: "debit"}
+	r, err := p.Parse(p.Sender, "", next)
+	if err != nil || r.Transaction == nil || r.Transaction.Amount != 158120 || r.Transaction.Merchant != "Other Shop" {
+		t.Fatalf("%s: %+v %v", got.Pattern, r.Transaction, err)
+	}
+}
