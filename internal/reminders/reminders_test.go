@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -14,14 +15,25 @@ import (
 	"github.com/audemed44/ledger/internal/store"
 )
 
-func TestParseDays(t *testing.T) {
-	days, err := ParseDays(" 5, 0,1,5 ")
-	if err != nil || len(days) != 3 || days[0] != 0 || days[2] != 5 {
-		t.Fatal(days, err)
+func TestSettingsAreCheckedAndKept(t *testing.T) {
+	s, _ := store.Open(t.TempDir())
+	defer s.Close()
+	if got, _ := LoadSettings(s); !slices.Equal(got.Days, []int{0, 1, 5}) || got.OnStatement {
+		t.Fatal("defaults", got)
 	}
-	for _, bad := range []string{"-1", "31", "soon"} {
-		if _, err := ParseDays(bad); err == nil {
-			t.Error(bad)
+	saved, err := SaveSettings(s, Settings{Days: []int{7, 0, 3, 7}, OnStatement: true})
+	if err != nil || !slices.Equal(saved.Days, []int{0, 3, 7}) {
+		t.Fatal(saved, err)
+	}
+	if got, _ := LoadSettings(s); !slices.Equal(got.Days, []int{0, 3, 7}) || !got.OnStatement {
+		t.Fatal(got)
+	}
+	if saved, err = SaveSettings(s, Settings{Days: []int{}}); err != nil || len(saved.Days) != 0 {
+		t.Fatal("no day reminders", saved, err)
+	}
+	for _, bad := range [][]int{{-1}, {31}, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}} {
+		if _, err := SaveSettings(s, Settings{Days: bad}); err == nil {
+			t.Error("accepted", bad)
 		}
 	}
 }
@@ -52,7 +64,7 @@ func TestEachStepIsSentOnceWhileUnpaid(t *testing.T) {
 		titles = append(titles, body["title"]+" | "+body["body"])
 	}))
 	defer srv.Close()
-	n := &Notifier{Store: s, URL: srv.URL, Days: []int{0, 1, 5}}
+	n := &Notifier{Store: s, URL: srv.URL}
 	at := func(day, hour int) time.Time { return time.Date(2026, 10, day, hour, 0, 0, 0, time.Local) }
 	for _, now := range []time.Time{
 		at(1, 10),           // 7 days out: nothing yet
@@ -91,7 +103,8 @@ func TestFailedSendsAreRetried(t *testing.T) {
 	status := http.StatusNoContent
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(status) }))
 	defer srv.Close()
-	n := &Notifier{Store: s, URL: srv.URL, Days: []int{1}}
+	SaveSettings(s, Settings{Days: []int{1}})
+	n := &Notifier{Store: s, URL: srv.URL}
 	now := time.Date(2026, 10, 7, 10, 0, 0, 0, time.Local)
 	if err := n.Check(context.Background(), now); err == nil {
 		t.Fatal("204 treated as sent")
@@ -121,13 +134,13 @@ func TestNewStatementNoticeIsOptional(t *testing.T) {
 	defer srv.Close()
 	at := func(day, hour int) time.Time { return time.Date(2026, 10, day, hour, 0, 0, 0, time.Local) }
 
-	off := &Notifier{Store: s, URL: srv.URL, Days: []int{0, 1, 5}}
-	off.Check(context.Background(), at(1, 10))
+	n := &Notifier{Store: s, URL: srv.URL}
+	n.Check(context.Background(), at(1, 10))
 	if len(titles) != 0 {
 		t.Fatalf("notice without the option: %q", titles)
 	}
 
-	n := &Notifier{Store: s, URL: srv.URL, Days: []int{0, 1, 5}, OnStatement: true}
+	SaveSettings(s, Settings{Days: []int{0, 1, 5}, OnStatement: true})
 	for _, now := range []time.Time{at(1, 8), at(1, 10), at(1, 15), at(7, 10)} {
 		if err := n.Check(context.Background(), now); err != nil {
 			t.Fatal(err)

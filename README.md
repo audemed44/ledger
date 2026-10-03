@@ -37,8 +37,9 @@ binary that idles at about 11 MB of RAM.
   due date) less the payments and refunds since, with a **Mark paid** for
   payments Ledger sees no alert for.
 - **Payment reminders**: what's left to pay, pushed to an Apprise-compatible
-  endpoint (apprise-api, Lookout) 5, 1 and 0 days before the due date, and
-  once when overdue, until the card is paid.
+  endpoint (apprise-api, Lookout) on the days you choose before the due
+  date (5, 1 and 0 by default), and once when overdue, until the card is
+  paid. Optionally, a notice when a new statement arrives.
 - **Foyer**: a widget with this month's debits, card dues (with Mark paid)
   and what needs review.
 
@@ -82,10 +83,8 @@ they belong together.
 | `LEDGER_POLL_INTERVAL` | `15m` | At least `1m` |
 | `LEDGER_BACKFILL` | `false` | Import mail already under the label (see below) |
 | `LEDGER_PDF_PASSWORDS` | empty | Statement passwords, separated by `\|` |
-| `LEDGER_NOTIFY_URL` | empty | Apprise endpoint for payment reminders, e.g. `http://lookout:8080/notify/ledger`; off when empty |
+| `LEDGER_NOTIFY_URL` | empty | Apprise endpoint for payment reminders, e.g. `http://lookout:8080/notify/ledger`; off when empty. Reminder days and the new-statement notice are set on the Connection page |
 | `HOMEPAGE_URL` | empty | Foyer's address, for a link back to it in the header |
-| `LEDGER_REMINDER_DAYS` | `5,1,0` | Days before a card's due date to remind; reminders start at 9:00 |
-| `LEDGER_REMINDER_ON_STATEMENT` | `false` | Also notify once when a card's new statement arrives (while it isn't yet due) |
 | `LEDGER_FETCH_STATEMENT_LINKS` | `true` | Download HDFC Bank statements from the SmartStatement link in their emails |
 | `LEDGER_SECURE_COOKIES` | `true` | |
 | `LEDGER_DATA_DIR` | `/data` | |

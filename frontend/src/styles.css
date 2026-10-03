@@ -444,6 +444,7 @@ code {
 }
 .actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
 }
@@ -614,6 +615,14 @@ footer a {
 .connection-facts strong {
   font-size: 12px;
   font-weight: 500;
+}
+.reminder-settings {
+  display: grid;
+  gap: 18px;
+  margin: 30px 0 0;
+}
+.reminder-settings .connection-facts {
+  margin: 6px 0 24px;
 }
 .setup {
   background: var(--raised);

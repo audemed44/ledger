@@ -1,20 +1,48 @@
 import { useState } from "preact/hooks";
-import { BellRing, RefreshCw } from "lucide-preact";
+import { BellRing, RefreshCw, Save } from "lucide-preact";
 import { api } from "../api";
 import type { Summary, Sync } from "../types";
-import { ErrorNote, Section } from "./ui";
+import { ErrorNote, Field, Section } from "./ui";
 
 export function ConnectionPage({
   sync,
   busy,
   syncNow,
   reminders,
+  saved,
 }: {
   sync: Sync;
   busy: boolean;
   syncNow: () => void;
   reminders: Summary["reminders"];
+  saved: () => void;
 }) {
+  // The form's edits, until saved; the summary refreshes underneath it.
+  const [draft, setDraft] = useState<{ days: string; on_statement: boolean } | null>(null);
+  const [saving, setSaving] = useState<{ busy?: boolean; error?: string; done?: boolean }>({});
+  const form = draft ?? {
+    days: [...(reminders.days ?? [])].reverse().join(", "),
+    on_statement: reminders.on_statement,
+  };
+  async function saveSettings() {
+    const parts = form.days
+      .split(",")
+      .map((d) => d.trim())
+      .filter(Boolean);
+    if (parts.some((d) => !/^\d+$/.test(d))) {
+      setSaving({ error: "Enter whole numbers of days, separated by commas" });
+      return;
+    }
+    setSaving({ busy: true });
+    try {
+      await api("reminders/settings", { days: parts.map(Number), on_statement: form.on_statement });
+      setDraft(null);
+      setSaving({ done: true });
+      saved();
+    } catch (e) {
+      setSaving({ error: (e as Error).message });
+    }
+  }
   const [test, setTest] = useState<{ busy?: boolean; error?: string; sent?: boolean }>({});
   async function sendTest() {
     setTest({ busy: true });
@@ -106,27 +134,43 @@ export function ConnectionPage({
               Before each card’s due date, Ledger sends what’s left to pay to your notification
               service, until the payments cover the statement or you mark it paid.
             </p>
-            {reminders.enabled ? (
+            <div class="reminder-settings">
+              <Field
+                label="Days before the due date"
+                hint="Separated by commas, each 0–30; 0 is the due date. Reminders go out from 9:00."
+              >
+                <input
+                  inputMode="numeric"
+                  value={form.days}
+                  onInput={(e) => setDraft({ ...form, days: e.currentTarget.value })}
+                />
+              </Field>
+              <label class="check">
+                <input
+                  type="checkbox"
+                  checked={form.on_statement}
+                  onChange={(e) => setDraft({ ...form, on_statement: e.currentTarget.checked })}
+                />
+                Also notify when a card’s new statement arrives
+              </label>
               <div class="connection-facts">
-                <div>
-                  <span class="eyebrow">Days before the due date</span>
-                  <strong>{[...(reminders.days ?? [])].reverse().join(", ")}</strong>
-                </div>
-                <div>
-                  <span class="eyebrow">New statement</span>
-                  <strong>{reminders.on_statement ? "Notify when it arrives" : "Off"}</strong>
-                </div>
                 <div>
                   <span class="eyebrow">When overdue</span>
                   <strong>Once, the next day</strong>
                 </div>
               </div>
-            ) : null}
-            <ErrorNote error={test.error ?? ""} />
+            </div>
+            <ErrorNote error={saving.error ?? test.error ?? ""} />
+            {saving.done && !draft && <p class="hint">Reminder settings saved.</p>}
             {test.sent && <p class="hint">Test reminder sent.</p>}
-            <button class="btn" onClick={sendTest} disabled={!reminders.enabled || test.busy}>
-              <BellRing size={15} /> {test.busy ? "Sending…" : "Send a test reminder"}
-            </button>
+            <div class="actions">
+              <button class="btn primary" onClick={saveSettings} disabled={!draft || saving.busy}>
+                <Save size={15} /> {saving.busy ? "Saving…" : "Save reminder settings"}
+              </button>
+              <button class="btn" onClick={sendTest} disabled={!reminders.enabled || test.busy}>
+                <BellRing size={15} /> {test.busy ? "Sending…" : "Send a test reminder"}
+              </button>
+            </div>
           </div>
           <div class="setup">
             <h3>Turning them on</h3>
@@ -136,12 +180,7 @@ export function ConnectionPage({
                 <code>http://lookout:8080/notify/ledger</code>, then restart Ledger.
               </li>
               <li>
-                Optionally set <code>LEDGER_REMINDER_DAYS</code> (default <code>5,1,0</code>).
-                Reminders go out from 9:00 in Ledger’s <code>TZ</code>.
-              </li>
-              <li>
-                Optionally set <code>LEDGER_REMINDER_ON_STATEMENT=true</code> to also be told when a
-                card’s new statement arrives.
+                Choose the days here. Reminders go out from 9:00 in Ledger’s <code>TZ</code>.
               </li>
             </ol>
           </div>
