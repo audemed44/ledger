@@ -97,11 +97,22 @@ export function AlertParserEditor({
     setParser((p) => ({ ...p, [key]: value }));
     setSavedID(0);
   }
+  // A saved parser's emails can be re-read, so a fix (say, debit to
+  // credit) also corrects what it already recorded.
+  const [handled, setHandled] = useState<{ emails: number; confirmed: number } | null>(null),
+    [reread, setReread] = useState(true);
+  useEffect(() => {
+    if (!initial.id) return;
+    api<{ emails: number; confirmed: number }>(`parsers/${initial.id}/handled`)
+      .then(setHandled)
+      .catch(() => setHandled(null));
+  }, [initial.id]);
+  const rereading = reread && !!handled?.emails;
   async function save() {
     setBusy(true);
     setError("");
     try {
-      const result = await api<Parser>("parsers", parser);
+      const result = await api<Parser>(rereading ? "parsers?reread=1" : "parsers", parser);
       setSavedID(result.id);
       setParser(result);
       await api("reprocess", {});
@@ -382,9 +393,24 @@ export function AlertParserEditor({
               Parser saved. Backlog retry failed; you can retry from the queue.
             </span>
           )}
-          <span class="hint">
-            Saving retries all queued mail. Previously imported transactions stay unchanged.
-          </span>
+          {handled && handled.emails > 0 ? (
+            <label class="check">
+              <input
+                type="checkbox"
+                checked={reread}
+                disabled={busy}
+                onChange={(e) => setReread(e.currentTarget.checked)}
+              />
+              Re-read the {handled.emails} email{handled.emails === 1 ? "" : "s"} this parser
+              already handled, so they follow this change
+              {handled.confirmed > 0 &&
+                ` (${handled.confirmed} confirmed by a statement stay as the statement has them)`}
+            </label>
+          ) : (
+            <span class="hint">
+              Saving retries all queued mail. Previously imported transactions stay unchanged.
+            </span>
+          )}
         </div>
         {parser.id > 0 && (
           <button
@@ -393,14 +419,20 @@ export function AlertParserEditor({
             onClick={async () => {
               if (
                 !window.confirm(
-                  `Delete parser “${parser.name}”? Imported transactions and emails will be kept.`,
+                  rereading
+                    ? `Delete parser “${parser.name}” and undo what it recorded? Its emails go back to the inbox (or to another parser that matches); transactions a statement confirmed are kept.`
+                    : `Delete parser “${parser.name}”? Imported transactions and emails will be kept.`,
                 )
               )
                 return;
               setBusy(true);
               setError("");
               try {
-                await api(`parsers/${parser.id}`, undefined, "DELETE");
+                await api(
+                  `parsers/${parser.id}${rereading ? "?reread=1" : ""}`,
+                  undefined,
+                  "DELETE",
+                );
                 saved();
               } catch (e) {
                 setError((e as Error).message);

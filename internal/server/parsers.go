@@ -29,18 +29,57 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 			failure(w, 400, err.Error())
 			return
 		}
+		// ?reread=1 re-reads the emails the parser handled before this
+		// change, so they follow it.
+		var handled store.Handled
+		if p.ID != 0 && r.URL.Query().Get("reread") == "1" {
+			var err error
+			if handled, _, err = s.Store.HandledByID(p.ID); err != nil {
+				failure(w, 500, "Could not find the parser's emails")
+				return
+			}
+		}
 		saved, err := s.Store.SaveParser(p)
 		if err != nil {
 			failure(w, 500, "Could not save parser")
 			return
 		}
-		jsonResponse(w, saved)
+		out := reread{Parser: saved}
+		if out.Reread, out.Kept, err = s.Store.Reread(handled.IDs); err != nil {
+			failure(w, 500, "Parser saved, but re-reading its emails stopped")
+			return
+		}
+		jsonResponse(w, out)
+	})
+	// Handled counts the emails a parser has recorded or ignored, for the
+	// editor to offer re-reading them.
+	mux.HandleFunc("GET /api/parsers/{id}/handled", func(w http.ResponseWriter, r *http.Request) {
+		h, ok, err := s.Store.HandledByID(pathID(r))
+		if err != nil {
+			failure(w, 500, "Could not find the parser's emails")
+			return
+		}
+		if !ok {
+			failure(w, 404, "Parser not found")
+			return
+		}
+		jsonResponse(w, h)
 	})
 	mux.HandleFunc("DELETE /api/parsers/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := pathID(r)
 		if id == 0 {
 			failure(w, 400, "Invalid parser")
 			return
+		}
+		// ?reread=1 also re-reads the emails it handled: with no parser for
+		// them, their transactions go and they return to the inbox.
+		var handled store.Handled
+		if r.URL.Query().Get("reread") == "1" {
+			var err error
+			if handled, _, err = s.Store.HandledByID(id); err != nil {
+				failure(w, 500, "Could not find the parser's emails")
+				return
+			}
 		}
 		err := s.Store.DeleteParser(id)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -51,7 +90,12 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 			failure(w, 500, "Could not delete parser")
 			return
 		}
-		jsonResponse(w, map[string]bool{"ok": true})
+		out := reread{}
+		if out.Reread, out.Kept, err = s.Store.Reread(handled.IDs); err != nil {
+			failure(w, 500, "Parser deleted, but re-reading its emails stopped")
+			return
+		}
+		jsonResponse(w, out)
 	})
 	// Preview runs a draft parser over a queued message or a pasted sample.
 	mux.HandleFunc("POST /api/parsers/preview", func(w http.ResponseWriter, r *http.Request) {
@@ -153,4 +197,12 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 		w.Header().Set("Content-Disposition", `attachment; filename="ledger-parsers.yaml"`)
 		w.Write(raw)
 	})
+}
+
+// reread is a parser change's result: the parser, and how many of its
+// emails were re-read or kept (confirmed by a statement).
+type reread struct {
+	alerts.Parser
+	Reread int `json:"reread"`
+	Kept   int `json:"kept"`
 }

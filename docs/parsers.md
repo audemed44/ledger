@@ -65,8 +65,14 @@ Date layouts are Go's: `02-Jan-2006`, `2006-01-02`, `02/01/2006 15:04`.
   bank account it draws on; see [Debit cards](#debit-cards).
 - An email must match **exactly one** parser, once. If two parsers match,
   or a body matches twice, it stays in the inbox.
-- Saving a parser retries the whole backlog. Editing or deleting a parser
-  never changes transactions it already imported.
+- Saving a parser retries the whole backlog.
+- **Fixing a mistake**: when you edit or delete a parser that has already
+  handled emails (read a credit as a debit, say), **Re-read the emails this
+  parser already handled** (ticked by default) undoes what they recorded
+  and reads them again with the parsers as they are now. After a delete,
+  emails no parser matches go back to the inbox. An alert transaction a
+  statement has confirmed stays as the statement has it. Untick it to leave
+  past transactions as they are.
 - **Export YAML** downloads every alert parser, for backups or version
   control.
 

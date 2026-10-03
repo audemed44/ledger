@@ -886,3 +886,76 @@ func TestDebitCardAlertsLandOnTheLinkedAccount(t *testing.T) {
 		t.Fatal("unlinking changed recorded transactions")
 	}
 }
+
+func TestRereadFixesAParsersMistakes(t *testing.T) {
+	s := testStore(t)
+	p := fixture.AlertParser()
+	p.Issuer, p.AccountKind = "HDFC", "card"
+	p, _ = s.SaveParser(p)
+	refund, _ := s.Ingest(fixture.Mail("refund", "INR 75.00 at Example Shop card 4242 on 2026-10-05"))
+	// This one a statement confirms, so it stays as the statement has it.
+	s.Ingest(fixture.Mail("purchase", "INR 500.00 at Example Shop card 4242 on 2026-10-01"))
+	st, _ := statements.ParseHDFC(fixture.Statement)
+	id, _ := s.Ingest(fixture.StatementMail("statement", fixture.Statement))
+	if out, err := s.ImportStatement(id, 0, PDFPreview{Statement: &st}, statements.Fingerprint(st)); err != nil || out.Matched != 1 {
+		t.Fatal(out, err)
+	}
+
+	h, err := s.HandledBy(p)
+	if err != nil || h.Emails != 2 || h.Confirmed != 1 {
+		t.Fatalf("%+v %v", h, err)
+	}
+	// The parser should have read credits.
+	p.Direction = "credit"
+	s.SaveParser(p)
+	reread, kept, err := s.Reread(h.IDs)
+	if err != nil || reread != 1 || kept != 1 {
+		t.Fatal(reread, kept, err)
+	}
+	rows, _ := s.Transactions(Filter{Search: "Example Shop"})
+	directions := map[int64]string{}
+	for _, r := range rows {
+		directions[r.Amount] = r.Direction + "/" + r.Status
+	}
+	if directions[7500] != "credit/provisional" || directions[50000] != "debit/confirmed" {
+		t.Fatal(directions)
+	}
+	if all, _ := s.Transactions(Filter{}); len(all) != 4 {
+		t.Fatal("re-read duplicated or lost transactions", len(all))
+	}
+
+	// Deleting a parser and re-reading sends its emails back to the inbox.
+	h, _ = s.HandledBy(p)
+	s.DeleteParser(p.ID)
+	if _, _, err = s.Reread(h.IDs); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := s.Message(refund); m.State != "queued" {
+		t.Fatal(m.State)
+	}
+	if all, _ := s.Transactions(Filter{}); len(all) != 3 {
+		t.Fatal(len(all))
+	}
+}
+
+func TestRereadUnlinksLateAlerts(t *testing.T) {
+	s := testStore(t)
+	id, _ := s.Ingest(fixture.StatementMail("statement", fixture.Statement))
+	st, _ := statements.ParseHDFC(fixture.Statement)
+	s.ImportStatement(id, 0, PDFPreview{Statement: &st}, statements.Fingerprint(st))
+	p := fixture.AlertParser()
+	p.Issuer, p.AccountKind = "HDFC", "card"
+	p, _ = s.SaveParser(p)
+	alert, _ := s.Ingest(fixture.Mail("late", "INR 500.00 at Example Shop card 4242 on 2026-10-01"))
+	h, _ := s.HandledBy(p)
+	p.Direction = "ignore"
+	s.SaveParser(p)
+	if _, _, err := s.Reread(h.IDs); err != nil {
+		t.Fatal(err)
+	}
+	var linked int
+	s.DB.QueryRow("SELECT count(*) FROM transactions WHERE alert_message_id=?", alert).Scan(&linked)
+	if m, _ := s.Message(alert); m.State != "ignored" || linked != 0 {
+		t.Fatal(m.State, linked)
+	}
+}
