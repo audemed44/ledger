@@ -672,3 +672,30 @@ it("lists ignore rules separately and filters parsers by issuer and search", asy
   expect(screen.queryByText("HDFC · UPI payment")).toBeNull();
   expect(screen.getByText(/Ignore · HDFC · OTP/)).toBeTruthy();
 });
+
+it("dismisses an email from the inbox list", async () => {
+  location.hash = "#inbox";
+  const posts: [string, any][] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
+    if (options?.method === "POST") posts.push([String(url), JSON.parse(options.body as string)]);
+    if (url === "/api/summary")
+      return reply({
+        totals: [],
+        accounts: [],
+        transactions: 0,
+        queued: 1,
+        parsers: 1,
+        month: "2026-10",
+        demo: false,
+      });
+    if (url === "/api/sync") return reply({ configured: true, running: false, label: "Bank" });
+    if (url === "/api/messages") return reply([message]);
+    return reply({ ok: true });
+  });
+  await act(async () => {
+    render(<App />);
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
+  await screen.findByText(/Dismissed “Example card alert”/);
+  expect(posts).toEqual([["/api/messages/1/dismiss", { dismissed: true }]]);
+});

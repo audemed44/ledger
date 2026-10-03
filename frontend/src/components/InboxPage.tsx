@@ -104,6 +104,7 @@ export function InboxPage({
           <option value="all">All emails</option>
           <option value="pdf">PDF statements</option>
           <option value="text">Text/HTML alerts</option>
+          <option value="dismissed">Dismissed</option>
         </select>
       </label>
       <p class="hint">
@@ -138,18 +139,39 @@ export function InboxPage({
                 </div>
                 <p class="queue-reason">{m.reason || "No matching alert parser"}</p>
               </div>
-              <button
-                class="btn"
-                onClick={async () => {
-                  try {
-                    edit(await api<Message>("messages/" + m.id));
-                  } catch (e) {
-                    setError((e as Error).message);
-                  }
-                }}
-              >
-                Review <ArrowRight size={14} />
-              </button>
+              <div class="queue-actions">
+                <button
+                  class="btn"
+                  disabled={busy}
+                  onClick={async () => {
+                    const dismissed = m.state !== "dismissed";
+                    setError("");
+                    try {
+                      await api(`messages/${m.id}/dismiss`, { dismissed });
+                      setNotice(
+                        dismissed ? `Dismissed “${m.subject}”.` : `Restored “${m.subject}”.`,
+                      );
+                      refresh();
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  }}
+                >
+                  {m.state === "dismissed" ? "Restore" : "Dismiss"}
+                </button>
+                <button
+                  class="btn"
+                  onClick={async () => {
+                    try {
+                      edit(await api<Message>("messages/" + m.id));
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  }}
+                >
+                  Review <ArrowRight size={14} />
+                </button>
+              </div>
             </article>
           ))}
           <p class="hint">

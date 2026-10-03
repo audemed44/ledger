@@ -13,6 +13,12 @@ the reason. Filter it to **PDF statements** or **Text/HTML alerts**; an
 email with a PDF counts as a statement even if it has covering text. The
 list shows the latest 200, but **Retry backlog** processes all of it.
 
+**Dismiss** takes an email you've dealt with outside Ledger out of the
+inbox: an expired statement link whose statement you uploaded by hand, say.
+It stays archived, and retries, automatic imports and statement downloads
+leave it alone. Filter the inbox to **Dismissed** to see them; **Restore**
+puts one back and processes it again.
+
 Mail is read as plain text. For HTML-only emails, the server extracts the
 visible text: scripts, styles, hidden elements and images are dropped, and
 nothing is fetched or rendered. When an email has both, the plain text

@@ -150,6 +150,8 @@ func (s *Store) Messages() ([]Message, error) { return s.FilteredMessages("") }
 func (s *Store) FilteredMessages(kind string) ([]Message, error) {
 	query := "SELECT id,sender,subject,date,state,reason,has_pdf FROM messages WHERE state='queued'"
 	switch kind {
+	case "dismissed":
+		query = "SELECT id,sender,subject,date,state,reason,has_pdf FROM messages WHERE state='dismissed'"
 	case "pdf":
 		query += " AND has_pdf=1"
 	case "text":
@@ -266,4 +268,38 @@ func (s *Store) recoverQueuedText(all bool) error {
 			}
 		}
 	}
+}
+
+// DismissedReason is the reason a dismissed email shows.
+const DismissedReason = "Dismissed from the inbox"
+
+// DismissMessage takes a queued email out of the inbox, handled outside
+// Ledger (a statement uploaded by hand, say). It stays archived, and
+// retries, automatic imports and statement downloads leave it alone.
+func (s *Store) DismissMessage(id int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, err := s.DB.Exec("UPDATE messages SET state='dismissed',reason=? WHERE id=? AND state='queued'", DismissedReason, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := r.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// RestoreMessage puts a dismissed email back in the inbox and processes it
+// again.
+func (s *Store) RestoreMessage(id int64) error {
+	s.mu.Lock()
+	r, err := s.DB.Exec("UPDATE messages SET state='queued',reason='' WHERE id=? AND state='dismissed'", id)
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if n, _ := r.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return s.ingested(id)
 }

@@ -406,3 +406,32 @@ func TestTransferRoutes(t *testing.T) {
 		t.Fatal(w.Body.String())
 	}
 }
+
+func TestDismissRoutes(t *testing.T) {
+	s := testStore(t)
+	id, _ := s.Ingest(fixture.Mail("stray", fixture.AlertBody))
+	h := (&Server{Store: s, Token: "1234"}).Handler()
+	call := func(method, path, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer 1234")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	path := fmt.Sprintf("/api/messages/%d/dismiss", id)
+	if w := call("POST", path, `{"dismissed":true}`); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w := call("GET", "/api/messages?kind=dismissed", ""); !strings.Contains(w.Body.String(), "Dismissed from the inbox") {
+		t.Fatal(w.Body.String())
+	}
+	if w := call("POST", path, `{"dismissed":true}`); w.Code != 409 {
+		t.Fatal(w.Code)
+	}
+	if w := call("POST", path, `{"dismissed":false}`); w.Code != 200 {
+		t.Fatal(w.Code)
+	}
+	if w := call("GET", "/api/messages", ""); !strings.Contains(w.Body.String(), fmt.Sprintf(`"id":%d`, id)) {
+		t.Fatal("not restored", w.Body.String())
+	}
+}

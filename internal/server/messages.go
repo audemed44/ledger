@@ -9,7 +9,7 @@ import (
 func (s *Server) messageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/messages", func(w http.ResponseWriter, r *http.Request) {
 		kind := r.URL.Query().Get("kind")
-		if kind != "" && kind != "all" && kind != "pdf" && kind != "text" {
+		if kind != "" && kind != "all" && kind != "pdf" && kind != "text" && kind != "dismissed" {
 			failure(w, 400, "Invalid inbox filter")
 			return
 		}
@@ -50,6 +50,31 @@ func (s *Server) messageRoutes(mux *http.ServeMux) {
 			return
 		}
 		jsonResponse(w, map[string]any{"parser": p, "processed": n})
+	})
+	// Dismiss takes an email out of the inbox ({"dismissed": true}) or
+	// puts a dismissed one back ({"dismissed": false}).
+	mux.HandleFunc("POST /api/messages/{id}/dismiss", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Dismissed bool `json:"dismissed"`
+		}
+		if !decode(w, r, &body) {
+			return
+		}
+		var err error
+		if body.Dismissed {
+			err = s.Store.DismissMessage(pathID(r))
+		} else {
+			err = s.Store.RestoreMessage(pathID(r))
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			failure(w, 409, "Only emails in the inbox can be dismissed, and only dismissed ones restored")
+			return
+		}
+		if err != nil {
+			failure(w, 500, "Could not update the email")
+			return
+		}
+		jsonResponse(w, map[string]bool{"ok": true})
 	})
 	mux.HandleFunc("POST /api/reprocess", func(w http.ResponseWriter, r *http.Request) {
 		n, err := s.Store.Reprocess()
