@@ -1,6 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
-import { ArrowRight, Mail, RefreshCw } from "lucide-preact";
-import { api } from "../api";
+import { ArrowRight, Mail, RefreshCw, Upload } from "lucide-preact";
+import { api, upload } from "../api";
 import { dateLabel } from "../lib";
 import type { Message } from "../types";
 import { Empty, ErrorNote, Section } from "./ui";
@@ -58,7 +58,40 @@ export function InboxPage({
         >
           <RefreshCw size={14} class={busy ? "spin" : ""} /> Retry backlog
         </button>
+        <label class={"btn" + (busy ? " disabled" : "")}>
+          <Upload size={14} /> Upload PDF
+          <input
+            type="file"
+            accept=".pdf,application/pdf"
+            class="visually-hidden"
+            disabled={busy}
+            onChange={async (e) => {
+              const file = e.currentTarget.files?.[0];
+              e.currentTarget.value = "";
+              if (!file) return;
+              setBusy(true);
+              setError("");
+              try {
+                const result = await upload<{ id: number; state: string; message: string }>(
+                  "statements/upload",
+                  file,
+                );
+                setNotice(result.message);
+                refresh();
+                if (result.state === "queued") edit(await api<Message>("messages/" + result.id));
+              } catch (e) {
+                setError((e as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        </label>
       </Section>
+      <p class="hint">
+        For banks that only email a download link: download the statement, then upload it here or
+        send it from Foyer’s Drop.
+      </p>
       <label class="field">
         <span class="eyebrow">Inbox filter</span>
         <select value={kind} onChange={(e) => setKind(e.currentTarget.value)}>

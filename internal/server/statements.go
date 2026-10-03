@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/audemed44/ledger/internal/statements"
@@ -68,6 +69,42 @@ func (s *Server) statementRoutes(mux *http.ServeMux) {
 			return
 		}
 		jsonResponse(w, map[string]bool{"ok": true})
+	})
+
+	// Upload takes a PDF statement downloaded by hand, from the app or from
+	// Foyer's Drop (multipart field "file"). Foyer shows message and url.
+	mux.HandleFunc("POST /api/statements/upload", func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, store.MaxUpload+1<<20)
+		// Beyond 1 MiB the upload is spooled to disk, not held in memory.
+		if r.ParseMultipartForm(1<<20) != nil {
+			failure(w, 400, "Choose a PDF to upload (at most 18 MiB)")
+			return
+		}
+		defer r.MultipartForm.RemoveAll()
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			failure(w, 400, "Choose a PDF to upload (at most 18 MiB)")
+			return
+		}
+		defer file.Close()
+		pdf, err := io.ReadAll(io.LimitReader(file, store.MaxUpload+1))
+		if err != nil {
+			failure(w, 400, "Could not read the upload")
+			return
+		}
+		m, err := s.Store.Upload(header.Filename, pdf)
+		if err != nil {
+			failure(w, 400, err.Error())
+			return
+		}
+		message := "Statement imported"
+		if m.State == "queued" {
+			message = "Saved to the Inbox for review"
+			if m.Reason != "" {
+				message += ": " + m.Reason
+			}
+		}
+		jsonResponse(w, map[string]any{"id": m.ID, "state": m.State, "reason": m.Reason, "message": message, "url": "/#inbox"})
 	})
 
 	// PDF work runs one extraction at a time, to bound memory and CPU.
