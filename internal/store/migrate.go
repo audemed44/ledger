@@ -26,7 +26,12 @@ CREATE TABLE IF NOT EXISTS statement_links(message_id INTEGER PRIMARY KEY REFERE
 CREATE TABLE IF NOT EXISTS transfer_rules(
   id INTEGER PRIMARY KEY, issuer TEXT NOT NULL, pattern TEXT NOT NULL, example TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS card_links(
-  issuer TEXT NOT NULL, card TEXT NOT NULL, account TEXT NOT NULL, PRIMARY KEY(issuer,card));`
+  issuer TEXT NOT NULL, card TEXT NOT NULL, account TEXT NOT NULL, PRIMARY KEY(issuer,card));
+CREATE TABLE IF NOT EXISTS reminders(
+  account_key TEXT NOT NULL, due_date TEXT NOT NULL, days INTEGER NOT NULL, sent TEXT NOT NULL,
+  PRIMARY KEY(account_key,due_date,days));
+CREATE TABLE IF NOT EXISTS dues_settled(
+  account_key TEXT NOT NULL, due_date TEXT NOT NULL, PRIMARY KEY(account_key,due_date));`
 
 // migrate creates the schema and runs each upgrade. Every step is
 // idempotent, so it runs on every start.

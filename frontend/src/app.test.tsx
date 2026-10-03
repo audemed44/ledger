@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/preact";
 import { afterEach, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { CardDues } from "./components/CardDues";
 import { TransactionsPage } from "./components/TransactionsPage";
 import { money, periodRange, recentMonths } from "./lib";
 const summary = {
@@ -9,6 +10,8 @@ const summary = {
   transactions: 0,
   queued: 0,
   parsers: 0,
+  dues: [],
+  reminders: { enabled: false, days: null },
   month: "2026-10",
   demo: false,
 };
@@ -157,4 +160,48 @@ it("filters transactions by a period from the menu", async () => {
   expect(screen.queryByLabelText("From date")).toBeNull();
   fireEvent.change(screen.getByLabelText("Period"), { target: { value: "custom" } });
   expect(screen.getByLabelText("From date")).toBeTruthy();
+});
+
+it("lists card dues and marks one paid", async () => {
+  const calls: { url: string; body: string }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, body: String(init?.body ?? "") });
+      return new Response("{}");
+    }),
+  );
+  const saved = vi.fn();
+  const due = {
+    account_id: "key",
+    issuer: "Example Bank",
+    last_four: "4242",
+    statement_date: "2026-09-20",
+    due_date: "2026-10-08",
+    currency: "INR",
+    total_due: 1234500,
+    minimum_due: 61700,
+    paid: 0,
+    remaining: 1234500,
+    days: 5,
+    settled: false,
+    status: "due" as const,
+  };
+  render(
+    <CardDues
+      summary={{ ...summary, dues: [due], reminders: { enabled: true, days: [0, 1, 5] } }}
+      saved={saved}
+    />,
+  );
+  expect(screen.getByText("Due in 5 days")).toBeTruthy();
+  expect(screen.getByText(money(1234500, "INR"))).toBeTruthy();
+  expect(screen.getByText("Reminders 5, 1, 0 days before")).toBeTruthy();
+  fireEvent.click(screen.getByText("Mark paid"));
+  await waitFor(() => expect(saved).toHaveBeenCalled());
+  expect(calls[0].url).toBe("/api/dues/settle");
+  expect(JSON.parse(calls[0].body)).toEqual({
+    account_id: "key",
+    due_date: "2026-10-08",
+    settled: true,
+  });
 });

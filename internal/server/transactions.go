@@ -124,8 +124,15 @@ type Summary struct {
 	store.Counts
 	Totals   []store.Total    `json:"totals"`
 	Accounts []ledger.Account `json:"accounts"`
-	Month    string           `json:"month"`
-	Demo     bool             `json:"demo"`
+	Dues     []store.Due      `json:"dues"`
+	// Reminders is whether payment reminders are sent, and how many days
+	// before the due date.
+	Reminders struct {
+		Enabled bool  `json:"enabled"`
+		Days    []int `json:"days"`
+	} `json:"reminders"`
+	Month string `json:"month"`
+	Demo  bool   `json:"demo"`
 }
 
 // summary's month follows TZ.
@@ -138,7 +145,13 @@ func (s *Server) summary() (Summary, error) {
 	if out.Totals, err = s.Store.MonthTotals(out.Month); err != nil {
 		return out, err
 	}
-	out.Accounts, err = s.Store.Accounts()
+	if out.Accounts, err = s.Store.Accounts(); err != nil {
+		return out, err
+	}
+	if s.Reminders.Enabled() {
+		out.Reminders.Enabled, out.Reminders.Days = true, s.Reminders.Days
+	}
+	out.Dues, err = s.Store.Dues(time.Now())
 	return out, err
 }
 

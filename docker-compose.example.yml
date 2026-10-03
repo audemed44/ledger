@@ -24,6 +24,10 @@ services:
       # HDFC Bank emails a SmartStatement link instead of a PDF; Ledger
       # downloads the statement from it. Set false to upload by hand instead.
       # - LEDGER_FETCH_STATEMENT_LINKS=false
+      # Card payment reminders go to an Apprise endpoint (apprise-api, or
+      # Lookout's /notify/<key>), by default 5, 1 and 0 days before the due date.
+      # - LEDGER_NOTIFY_URL=http://lookout:8080/notify/ledger
+      # - LEDGER_REMINDER_DAYS=5,1,0
       # Session cookies need HTTPS. Set false only for plain-HTTP testing.
       # - LEDGER_SECURE_COOKIES=false
     volumes:

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/audemed44/ledger/internal/gmail"
+	"github.com/audemed44/ledger/internal/reminders"
 	"github.com/audemed44/ledger/internal/store"
 )
 
@@ -24,6 +25,8 @@ type Server struct {
 	SecureCookies bool
 	Demo          bool
 	Files         fs.FS
+	// Reminders sends card payment reminders; nil or without a URL, none.
+	Reminders *reminders.Notifier
 }
 
 const contentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
@@ -38,6 +41,7 @@ func (s *Server) Handler() http.Handler {
 	s.messageRoutes(mux)
 	s.parserRoutes(mux)
 	s.statementRoutes(mux)
+	s.dueRoutes(mux)
 	mux.HandleFunc("GET /api/foyer/widget", s.widget)
 	if s.Files != nil {
 		mux.Handle("GET /", http.FileServerFS(s.Files))

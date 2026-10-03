@@ -13,6 +13,7 @@ import (
 
 	"github.com/audemed44/ledger/internal/fixture"
 	"github.com/audemed44/ledger/internal/gmail"
+	"github.com/audemed44/ledger/internal/ledger"
 	"github.com/audemed44/ledger/internal/statements"
 	"github.com/audemed44/ledger/internal/store"
 )
@@ -433,5 +434,46 @@ func TestDismissRoutes(t *testing.T) {
 	}
 	if w := call("GET", "/api/messages", ""); !strings.Contains(w.Body.String(), fmt.Sprintf(`"id":%d`, id)) {
 		t.Fatal("not restored", w.Body.String())
+	}
+}
+
+func TestWidgetListsCardDuesAndMarksThemPaid(t *testing.T) {
+	s := testStore(t)
+	due := time.Now().AddDate(0, 0, 2).Format("2006-01-02")
+	st := statements.Statement{AccountID: ledger.AccountKey("Example Bank", "card", "4242"), AccountKind: "card",
+		Issuer: "Example Bank", Account: "4242", Date: time.Now().AddDate(0, 0, -18).Format("2006-01-02"), DueDate: due, TotalDue: 1234500}
+	raw, _ := json.Marshal(st)
+	s.DB.Exec("INSERT INTO statements(account_key,date,fingerprint,snapshot) VALUES(?,?,?,?)", st.AccountID, st.Date, "x", string(raw))
+	h := (&Server{Store: s, Token: "1234"}).Handler()
+	call := func(method, path string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader("{}"))
+		r.Header.Set("Authorization", "Bearer 1234")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	type widget struct {
+		Stats []map[string]string `json:"stats"`
+		Items []struct {
+			Title, Subtitle, Caption string
+			Action                   struct{ URL string }
+		} `json:"items"`
+	}
+	var got widget
+	json.Unmarshal(call("GET", "/api/foyer/widget").Body.Bytes(), &got)
+	if len(got.Items) != 1 || got.Items[0].Title != "Example Bank card ••4242" || got.Items[0].Caption != "₹12,345.00" ||
+		!strings.HasSuffix(got.Items[0].Subtitle, "in 2 days") || got.Stats[1]["label"] != "Card dues" || got.Stats[1]["tone"] != "warn" {
+		t.Fatalf("%+v", got)
+	}
+	if w := call("POST", got.Items[0].Action.URL); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	got = widget{}
+	json.Unmarshal(call("GET", "/api/foyer/widget").Body.Bytes(), &got)
+	if len(got.Items) != 0 || got.Stats[1]["caption"] != "All paid" {
+		t.Fatalf("%+v", got)
+	}
+	if w := call("POST", "/api/reminders/test"); w.Code != 409 {
+		t.Fatal("test reminder without LEDGER_NOTIFY_URL", w.Code)
 	}
 }

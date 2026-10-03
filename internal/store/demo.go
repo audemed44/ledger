@@ -1,14 +1,17 @@
 package store
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/audemed44/ledger/internal/alerts"
+	"github.com/audemed44/ledger/internal/ledger"
+	"github.com/audemed44/ledger/internal/statements"
 )
 
-// SeedDemo fills the store with synthetic alerts, a parser for them and one
-// unmatched email, for `ledger --demo`.
+// SeedDemo fills the store with synthetic alerts, a parser for them, card
+// statements with payments due and one unmatched email, for `ledger --demo`.
 func (s *Store) SeedDemo() error {
 	parsers, err := s.Parsers()
 	if err != nil {
@@ -48,8 +51,37 @@ func (s *Store) SeedDemo() error {
 			return err
 		}
 	}
+	if err = s.seedDemoStatements(); err != nil {
+		return err
+	}
 	_, err = s.Ingest([]byte("From: notices@example.invalid\r\nSubject: A new alert format\r\n" +
 		"Message-ID: <demo-unmatched@ledger.invalid>\r\nContent-Type: text/plain\r\n\r\n" +
 		"Your card 8080 was debited INR 450.00 at EXAMPLE SHOP on 02-Oct-2026.\n"))
 	return err
+}
+
+// seedDemoStatements records two card statements' summaries, so the dues
+// have something to show.
+func (s *Store) seedDemoStatements() error {
+	for _, d := range []struct {
+		issuer, card   string
+		total, minimum int64
+		dueIn          int
+	}{{"Example Bank", "4242", 1849250, 92500, 3}, {"Sample Card Co", "9090", 412000, 20600, 12}} {
+		now := time.Now()
+		st := statements.Statement{
+			AccountID: ledger.AccountKey(d.issuer, "card", d.card), AccountKind: "card",
+			Issuer: d.issuer, Account: d.card, Balanced: true,
+			Date:     now.AddDate(0, 0, d.dueIn-20).Format("2006-01-02"),
+			DueDate:  now.AddDate(0, 0, d.dueIn).Format("2006-01-02"),
+			TotalDue: d.total, MinimumDue: d.minimum,
+		}
+		raw, _ := json.Marshal(st)
+		_, err := s.DB.Exec("INSERT OR IGNORE INTO statements(account_key,date,fingerprint,snapshot) VALUES(?,?,?,?)",
+			st.AccountID, st.Date, statements.Fingerprint(st), string(raw))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -56,8 +56,25 @@ export type Summary = {
   transactions: number;
   queued: number;
   parsers: number;
+  dues: Due[];
+  reminders: { enabled: boolean; days: number[] | null };
   month: string;
   demo: boolean;
+};
+export type Due = {
+  account_id: string;
+  issuer: string;
+  last_four: string;
+  statement_date: string;
+  due_date: string;
+  currency: string;
+  total_due: number;
+  minimum_due: number;
+  paid: number;
+  remaining: number;
+  days: number;
+  settled: boolean;
+  status: "paid" | "due" | "overdue";
 };
 export type Sync = {
   configured: boolean;

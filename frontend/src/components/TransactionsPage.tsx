@@ -78,7 +78,7 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
   }, [params, version, reload]);
   return (
     <section>
-      <Section index="01" title="Activity">
+      <Section index={summary.dues.length ? "02" : "01"} title="Activity">
         <span class="eyebrow">ALERTS → TRANSACTIONS</span>
       </Section>
       <div class="filters">

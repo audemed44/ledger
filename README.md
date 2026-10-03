@@ -32,10 +32,17 @@ binary that idles at about 11 MB of RAM.
 - **Transfers**: money moving between your own accounts (card bills, UPI
   to yourself) is paired and left out of spending; rules cover accounts
   Ledger doesn't see, such as auto-sweeps into deposits.
-- **Foyer**: a widget with this month's debits and what needs review.
+- **Card dues**: each credit card's latest statement (total, minimum and
+  due date) less the payments and refunds since, with a **Mark paid** for
+  payments Ledger sees no alert for.
+- **Payment reminders**: what's left to pay, pushed to an Apprise-compatible
+  endpoint (apprise-api, Lookout) 5, 1 and 0 days before the due date, and
+  once when overdue, until the card is paid.
+- **Foyer**: a widget with this month's debits, card dues (with Mark paid)
+  and what needs review.
 
-Still to come: more statement layouts, categories and charts, card due
-dates (iCal and reminders), and subscription detection.
+Still to come: more statement layouts, categories and charts, due dates
+as iCal, and subscription detection.
 
 ## Install
 
@@ -74,6 +81,8 @@ they belong together.
 | `LEDGER_POLL_INTERVAL` | `15m` | At least `1m` |
 | `LEDGER_BACKFILL` | `false` | Import mail already under the label (see below) |
 | `LEDGER_PDF_PASSWORDS` | empty | Statement passwords, separated by `\|` |
+| `LEDGER_NOTIFY_URL` | empty | Apprise endpoint for payment reminders, e.g. `http://lookout:8080/notify/ledger`; off when empty |
+| `LEDGER_REMINDER_DAYS` | `5,1,0` | Days before a card's due date to remind; reminders start at 9:00 |
 | `LEDGER_FETCH_STATEMENT_LINKS` | `true` | Download HDFC Bank statements from the SmartStatement link in their emails |
 | `LEDGER_SECURE_COOKIES` | `true` | |
 | `LEDGER_DATA_DIR` | `/data` | |
@@ -129,7 +138,8 @@ It exits 0 when the statement validates and 2 when it needs review.
 
 Add an **app** widget with URL `http://ledger:8080/api/foyer/widget` and
 `key` set to `LEDGER_TOKEN` (from Foyer's environment). It shows this
-month's debits per currency and how many emails need review, and PDFs in
+month's debits per currency, what's owed on your cards with a **Mark paid**
+button for each, and how many emails need review, and PDFs in
 Foyer's Drop get a **Send to Ledger** button: handy for statements a bank
 only emails as a download link.
 

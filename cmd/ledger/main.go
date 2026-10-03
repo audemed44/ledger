@@ -19,6 +19,7 @@ import (
 	_ "time/tzdata" // the runtime image may have no zoneinfo; TZ needs this
 
 	"github.com/audemed44/ledger/internal/gmail"
+	"github.com/audemed44/ledger/internal/reminders"
 	"github.com/audemed44/ledger/internal/server"
 	"github.com/audemed44/ledger/internal/smartstatement"
 	"github.com/audemed44/ledger/internal/statements"
@@ -84,6 +85,12 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	days, err := reminders.ParseDays(env("LEDGER_REMINDER_DAYS", "5,1,0"))
+	if err != nil {
+		slog.Error("LEDGER_REMINDER_DAYS: " + err.Error())
+		os.Exit(1)
+	}
+	notifier := &reminders.Notifier{Store: db, URL: os.Getenv("LEDGER_NOTIFY_URL"), Days: days}
 	poller := &gmail.Poller{Store: db, Config: cfg}
 	dist, err := fs.Sub(web.Dist, "dist")
 	if err != nil {
@@ -96,6 +103,7 @@ func main() {
 		SecureCookies: env("LEDGER_SECURE_COOKIES", "true") == "true",
 		Demo:          *demo,
 		Files:         dist,
+		Reminders:     notifier,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -105,6 +113,7 @@ func main() {
 		defer close(polling)
 		poller.Run(ctx)
 	}()
+	go notifier.Run(ctx)
 
 	srv := &http.Server{
 		Addr:              env("LEDGER_LISTEN", ":8080"),
@@ -120,7 +129,7 @@ func main() {
 		defer cancel()
 		_ = srv.Shutdown(shutdown)
 	}()
-	slog.Info("ledger listening", "addr", srv.Addr, "gmail", cfg.User != "" && cfg.Password != "", "demo", *demo)
+	slog.Info("ledger listening", "addr", srv.Addr, "gmail", cfg.User != "" && cfg.Password != "", "demo", *demo, "reminders", notifier.Enabled())
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("server stopped", "err", err)
 		os.Exit(1)
