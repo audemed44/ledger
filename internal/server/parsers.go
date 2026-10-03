@@ -182,6 +182,42 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 		}
 		jsonResponse(w, map[string]bool{"ok": true})
 	})
+	// Wordings: add an email's wording to an existing parser, or merge a
+	// parser for the same alert into another.
+	mux.HandleFunc("POST /api/parsers/{id}/wordings", func(w http.ResponseWriter, r *http.Request) {
+		var body alerts.Wording
+		if !decode(w, r, &body) {
+			return
+		}
+		p, err := s.Store.AddWording(pathID(r), body)
+		if errors.Is(err, sql.ErrNoRows) {
+			failure(w, 404, "Parser not found")
+			return
+		}
+		if err != nil {
+			failure(w, 400, err.Error())
+			return
+		}
+		jsonResponse(w, p)
+	})
+	mux.HandleFunc("POST /api/parsers/{id}/merge", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			From int64 `json:"from"`
+		}
+		if !decode(w, r, &body) {
+			return
+		}
+		p, err := s.Store.MergeParsers(pathID(r), body.From)
+		if errors.Is(err, sql.ErrNoRows) {
+			failure(w, 404, "Parser not found")
+			return
+		}
+		if err != nil {
+			failure(w, 400, err.Error())
+			return
+		}
+		jsonResponse(w, p)
+	})
 	mux.HandleFunc("GET /api/parsers.yaml", func(w http.ResponseWriter, r *http.Request) {
 		p, err := s.Store.Parsers()
 		if err != nil {

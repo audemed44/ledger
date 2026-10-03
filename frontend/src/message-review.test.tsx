@@ -596,3 +596,46 @@ it("builds a parser for alerts that name no merchant", async () => {
   await waitFor(() => expect(request).toBeTruthy());
   expect(request.marks.map((m: any) => m.field)).toEqual(["amount", "account", "date"]);
 });
+
+it("adds an email's wording to an existing parser, or merges parsers", async () => {
+  const sibling = { ...blankParser, id: 5, name: "HDFC UPI", sender: message.sender, pattern: "x" };
+  const posts: [string, any][] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
+    if (url === "/api/parsers") return reply([sibling]);
+    if (options?.method === "POST") posts.push([String(url), JSON.parse(options.body as string)]);
+    return reply({ matched: false, ignored: false });
+  });
+  const saved = vi.fn();
+  render(
+    <AlertParserEditor
+      initial={{ ...blankParser, pattern: "NEW WORDING", date_layout: "2-1-06" }}
+      message={message}
+      close={() => {}}
+      saved={saved}
+    />,
+  );
+  fireEvent.change(await screen.findByLabelText(/Save as/), { target: { value: "5" } });
+  fireEvent.click(screen.getByRole("button", { name: /Save & retry backlog/ }));
+  await waitFor(() => expect(saved).toHaveBeenCalled());
+  expect(posts[0]).toEqual([
+    "/api/parsers/5/wordings",
+    { pattern: "NEW WORDING", date_layout: "2-1-06", account_kind: "card" },
+  ]);
+  cleanup();
+
+  // Editing parser 6 offers merging parser 5 into it.
+  posts.length = 0;
+  render(
+    <AlertParserEditor
+      initial={{ ...sibling, id: 6, name: "HDFC UPI 2" }}
+      close={() => {}}
+      saved={saved}
+    />,
+  );
+  fireEvent.change(await screen.findByLabelText(/Merge another parser/), {
+    target: { value: "5" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Merge" }));
+  await waitFor(() => expect(posts.length).toBeGreaterThan(0));
+  expect(posts[0]).toEqual(["/api/parsers/6/merge", { from: 5 }]);
+});

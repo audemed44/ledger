@@ -108,7 +108,49 @@ export function AlertParserEditor({
       .catch(() => setHandled(null));
   }, [initial.id]);
   const rereading = reread && !!handled?.emails;
+  // Parsers for the same sender: a new email's wording can join one, and
+  // a saved parser can absorb another.
+  const [siblings, setSiblings] = useState<Parser[]>([]),
+    [target, setTarget] = useState(0),
+    [mergeFrom, setMergeFrom] = useState(0);
+  useEffect(() => {
+    api<Parser[]>("parsers")
+      .then((all) =>
+        setSiblings(
+          all.filter(
+            (p) =>
+              p.id !== initial.id &&
+              p.direction !== "ignore" &&
+              p.sender.toLowerCase() === (message?.sender || initial.sender).toLowerCase(),
+          ),
+        ),
+      )
+      .catch(() => setSiblings([]));
+  }, [initial.id]);
+  async function run(action: () => Promise<unknown>) {
+    setBusy(true);
+    setError("");
+    try {
+      await action();
+      await api("reprocess", {});
+      saved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function save() {
+    if (target) {
+      // Another wording of an existing parser.
+      return run(() =>
+        api(`parsers/${target}/wordings`, {
+          pattern: parser.pattern,
+          date_layout: parser.date_layout,
+          account_kind: parser.account_kind,
+        }),
+      );
+    }
     setBusy(true);
     setError("");
     try {
@@ -143,6 +185,21 @@ export function AlertParserEditor({
       </div>
       <div class="editor-body">
         <div class="editor-fields">
+          {!initial.id && siblings.length > 0 && (
+            <Field
+              label="Save as"
+              hint="The bank words the same alert in several ways? Add this wording to its parser instead of making another."
+            >
+              <select value={target} onChange={(e) => setTarget(Number(e.currentTarget.value))}>
+                <option value={0}>A new parser</option>
+                {siblings.map((p) => (
+                  <option value={p.id} key={p.id}>
+                    Another wording of “{p.name}”
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <div class="two-col">
             <Field label="Parser name">
               <input
@@ -261,6 +318,64 @@ export function AlertParserEditor({
               />
             </Field>
           </details>
+          {!!parser.wordings?.length && (
+            <fieldset class="field triggers">
+              <legend class="eyebrow">Other wordings ({parser.wordings.length})</legend>
+              {parser.wordings.map((w, i) => (
+                <div class="trigger" key={i}>
+                  <span class="mono">
+                    {w.pattern.length > 90 ? w.pattern.slice(0, 90) + "…" : w.pattern}
+                    <span class="hint">
+                      Date {w.date_layout}
+                      {w.account_kind && w.account_kind !== parser.account_kind
+                        ? ` · ${w.account_kind === "bank" ? "bank account" : w.account_kind === "debit" ? "debit card" : w.account_kind}`
+                        : ""}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    class="btn"
+                    onClick={() =>
+                      update(
+                        "wordings",
+                        (parser.wordings || []).filter((_, j) => j !== i),
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </fieldset>
+          )}
+          {!!initial.id && siblings.length > 0 && (
+            <div class="merge">
+              <Field
+                label="Merge another parser into this one"
+                hint="Its wordings move here and it's deleted; transactions stay. Same sender, issuer and direction only."
+              >
+                <select
+                  value={mergeFrom}
+                  onChange={(e) => setMergeFrom(Number(e.currentTarget.value))}
+                >
+                  <option value={0}>Choose a parser</option>
+                  {siblings.map((p) => (
+                    <option value={p.id} key={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <button
+                type="button"
+                class="btn"
+                disabled={busy || !mergeFrom}
+                onClick={() => run(() => api(`parsers/${initial.id}/merge`, { from: mergeFrom }))}
+              >
+                Merge
+              </button>
+            </div>
+          )}
           <label class="check">
             <input
               type="checkbox"

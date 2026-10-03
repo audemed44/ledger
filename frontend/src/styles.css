@@ -1311,3 +1311,12 @@ label.btn.disabled {
     grid-column: 1 / -1;
   }
 }
+.merge {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+}
+.merge .field {
+  flex: 1;
+  min-width: 0;
+}

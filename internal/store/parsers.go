@@ -246,3 +246,66 @@ func (s *Store) IgnoreLike(messageID int64) (alerts.Parser, error) {
 		Enabled:     true,
 	})
 }
+
+// AddWording adds another wording to a saved alert parser.
+func (s *Store) AddWording(id int64, w alerts.Wording) (alerts.Parser, error) {
+	p, ok, err := s.parserByID(id)
+	if err != nil {
+		return p, err
+	}
+	if !ok {
+		return p, sql.ErrNoRows
+	}
+	for _, existing := range p.All() {
+		if existing.Pattern == w.Pattern {
+			return p, nil
+		}
+	}
+	p.Wordings = append(p.Wordings, w)
+	return s.SaveParser(p)
+}
+
+// ErrCannotMerge is returned for parsers that read different alerts.
+var ErrCannotMerge = errors.New("Only parsers with the same sender, issuer, direction, currency and description can be merged")
+
+// MergeParsers moves every wording of parser from into parser into, then
+// deletes from. Both must read the same kind of alert from one sender;
+// their account types may differ. Transactions don't change: the merged
+// parser matches the same emails.
+func (s *Store) MergeParsers(into, from int64) (alerts.Parser, error) {
+	target, ok, err := s.parserByID(into)
+	if err != nil || !ok || into == from {
+		return target, errors.Join(err, sql.ErrNoRows)
+	}
+	source, ok, err := s.parserByID(from)
+	if err != nil || !ok {
+		return target, errors.Join(err, sql.ErrNoRows)
+	}
+	same := func(a, b string) bool { return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b)) }
+	if !same(target.Sender, source.Sender) || !same(target.Issuer, source.Issuer) ||
+		target.Direction != source.Direction || target.Currency != source.Currency ||
+		!same(target.Description, source.Description) {
+		return target, ErrCannotMerge
+	}
+	have := map[string]bool{}
+	for _, w := range target.All() {
+		have[w.Pattern] = true
+	}
+	for _, w := range source.All() {
+		if !have[w.Pattern] {
+			target.Wordings = append(target.Wordings, w)
+			have[w.Pattern] = true
+		}
+	}
+	// A parser that matched any subject keeps doing so; otherwise either
+	// subject may match.
+	if target.Subject != "" && source.Subject != "" && target.Subject != source.Subject {
+		target.Subject = "(?:" + target.Subject + ")|(?:" + source.Subject + ")"
+	} else if source.Subject == "" {
+		target.Subject = ""
+	}
+	if target, err = s.SaveParser(target); err != nil {
+		return target, err
+	}
+	return target, s.DeleteParser(from)
+}
