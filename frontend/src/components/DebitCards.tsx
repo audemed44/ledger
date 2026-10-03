@@ -33,7 +33,7 @@ export function DebitCards({ saved }: { saved: () => void }) {
   return (
     <section class="statement-section">
       <div class="section-head">
-        <span class="section-index">03</span>
+        <span class="section-index">04</span>
         <h2>Debit cards</h2>
       </div>
       <p class="hint">
@@ -68,9 +68,10 @@ export function DebitCards({ saved }: { saved: () => void }) {
           });
         }}
       >
-        <Field label="Issuer" hint="As on the alert parser, e.g. HDFC">
+        <Field label="Issuer">
           <input
             required
+            placeholder="HDFC"
             value={draft.issuer}
             onInput={(e) => setDraft({ ...draft, issuer: e.currentTarget.value })}
           />
@@ -99,6 +100,7 @@ export function DebitCards({ saved }: { saved: () => void }) {
           Link card
         </button>
       </form>
+      <p class="hint">Use the issuer exactly as on the card’s alert parser.</p>
     </section>
   );
 }

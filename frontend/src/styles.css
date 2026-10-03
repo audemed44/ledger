@@ -1360,3 +1360,28 @@ input[type="date"] {
     gap: 10px;
   }
 }
+.parser-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 12px;
+  max-width: 640px;
+  margin: 22px 0;
+}
+.ignore-rule {
+  width: 100%;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ignore-rule:hover {
+  background: rgb(255 255 255 / 0.03);
+}
+@media (max-width: 680px) {
+  .parser-filters {
+    grid-template-columns: 1fr;
+  }
+}

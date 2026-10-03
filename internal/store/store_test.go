@@ -837,9 +837,12 @@ func TestIgnoreEmailsLikeThis(t *testing.T) {
 		}
 		return id
 	}
+	bank := fixture.AlertParser()
+	bank.Sender, bank.Issuer = "otp@example.invalid", "HDFC"
+	s.SaveParser(bank)
 	first, second := otp("a", "482913"), otp("b", "100200")
 	p, err := s.IgnoreLike(first)
-	if err != nil || p.Direction != "ignore" || p.Pattern != "" {
+	if err != nil || p.Direction != "ignore" || p.Pattern != "" || p.Issuer != "HDFC" {
 		t.Fatalf("%+v %v", p, err)
 	}
 	s.Reprocess()

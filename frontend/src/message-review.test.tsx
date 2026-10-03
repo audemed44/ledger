@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/preact";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AlertParserEditor } from "./components/AlertParserEditor";
+import { AlertParsers } from "./components/AlertParsers";
 import { DebitCards } from "./components/DebitCards";
 import { MessageReview } from "./components/MessageReview";
 import { blankParser } from "./lib";
@@ -638,4 +639,36 @@ it("adds an email's wording to an existing parser, or merges parsers", async () 
   fireEvent.click(screen.getByRole("button", { name: "Merge" }));
   await waitFor(() => expect(posts.length).toBeGreaterThan(0));
   expect(posts[0]).toEqual(["/api/parsers/6/merge", { from: 5 }]);
+});
+
+it("lists ignore rules separately and filters parsers by issuer and search", async () => {
+  const p = (id: number, name: string, issuer: string, sender: string, direction = "debit") => ({
+    ...blankParser,
+    id,
+    name,
+    issuer,
+    sender,
+    direction,
+    subject: "",
+    pattern: "x",
+  });
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+    reply([
+      p(1, "HDFC · UPI payment", "HDFC", "alerts@hdfc.invalid"),
+      p(2, "SBI · NACH debit", "SBI", "alerts@sbi.invalid"),
+      p(3, "Ignore · HDFC · OTP", "", "alerts@hdfc.invalid", "ignore"),
+    ]),
+  );
+  render(<AlertParsers version={0} edit={() => {}} />);
+  await screen.findByText("HDFC · UPI payment");
+  // The ignore rule is in its own section, filed under its sender's issuer.
+  expect(screen.getByText("Ignore rules")).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Issuer"), { target: { value: "SBI" } });
+  expect(screen.queryByText("HDFC · UPI payment")).toBeNull();
+  expect(screen.queryByText(/Ignore · HDFC · OTP/)).toBeNull();
+  fireEvent.change(screen.getByLabelText("Issuer"), { target: { value: "HDFC" } });
+  expect(screen.getByText(/Ignore · HDFC · OTP/)).toBeTruthy();
+  fireEvent.input(screen.getByLabelText("Search parsers"), { target: { value: "otp" } });
+  expect(screen.queryByText("HDFC · UPI payment")).toBeNull();
+  expect(screen.getByText(/Ignore · HDFC · OTP/)).toBeTruthy();
 });
