@@ -82,3 +82,25 @@ func TestAxisCreditCard(t *testing.T) {
 		"other layout":  layout(fixture.Statement),
 	})
 }
+
+func TestICICICreditCard(t *testing.T) {
+	text := Text{Layout: fixture.ICICIStatement.Layout, Raw: fixture.ICICIStatement.Raw}
+	check(t, "icici-credit-card", text, Statement{
+		Issuer: "ICICI", AccountKind: "card", Account: "4242", Date: "2026-10-12", DueDate: "2026-10-30",
+		Opening: 200000, TotalDue: 125050, MinimumDue: 10000,
+	}, []string{
+		"2026-09-14 -500.25 EXAMPLE TELECOM MUMBAI IN",
+		"2026-09-20 +2000.00 BBPS PAYMENT RECEIVED",
+		"2026-10-02 -750.25 EXAMPLE BOOKS 24X7 BENGALURU IN",
+	})
+	with := func(raw string) Text { return Text{Layout: text.Layout, Raw: raw} }
+	failsClosed(t, "icici-credit-card", map[string]Text{
+		"no raw text":   {Layout: text.Layout},
+		"missing row":   with(strings.Replace(text.Raw, "02/10/2026 1000000003 EXAMPLE BOOKS 24X7 BENGALURU IN 15 750.25\n", "", 1)),
+		"foreign row":   with(strings.Replace(text.Raw, "IN 15 750.25", "US 15 USD 9.00 750.25 X", 1)),
+		"second card":   with(strings.Replace(text.Raw, "Statement period", "4000XXXXXXXX8080\nStatement period", 1)),
+		"credit missed": with(strings.Replace(text.Raw, "2,000.00 CR", "2,000.00", 1)),
+		"wrong layout":  {Layout: strings.ReplaceAll(text.Layout, "icicibank", "example"), Raw: text.Raw},
+		"no summary":    {Layout: strings.Replace(text.Layout, "Previous Balance", "Earlier", 1), Raw: text.Raw},
+	})
+}

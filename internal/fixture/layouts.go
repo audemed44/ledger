@@ -43,3 +43,53 @@ EXAMPLETOWN 100001
 Txn Date     Type                              Cr/Db MAD Contribution          Amount
 25th Sep     Purchase                          Db                    2%          5000
 `
+
+// ICICIStatement is an ICICI Bank credit card statement for card 4242, as
+// layout text (whose transaction amounts are missing, as in real
+// extractions) and raw text. 2,000.00 + 1,250.50 + 0.00 - 2,000.00 =
+// 1,250.50 due.
+var ICICIStatement = struct{ Layout, Raw string }{
+	Layout: `CREDIT CARD STATEMENT
+
+MR EXAMPLE PERSON
+1 EXAMPLE ROAD
+
+                   STATEMENT DATE                                                 All communications are being sent to your registered e-mail ID and mobile number
+             October 12, 2026                                                     l To update email ID and registered mailing address, visit www.icicibank.com > Login
+
+                 PAYMENT DUE DATE                                                 l To update mobile number, visit the nearest ATM or branch
+            October 30, 2026
+                                                                          STATEMENT SUMMARY
+
+
+                    Total Amount due                                                 Previous Balance                             Purchases / Charges                         Cash Advances                       Payments / Credits
+                                                                      =                                                 +                                         +                                         -
+                        ` + "`" + `1,250.50                                                       ` + "`" + `2,000.00                                       ` + "`" + `1,250.50                                    ` + "`" + `0.00                           ` + "`" + `2,000.00
+
+                Minimum Amount due                                        CREDIT SUMMARY
+                          ` + "`" + `100.00
+
+                       SPENDS OVERVIEW                                        Date                           SerNo.              Transaction Details                                            Reward           Intl.#        Amount
+                                                                              4000XXXXXXXX4242
+                                                                              14/09/2026               1000000001                EXAMPLE TELECOM MUMBAI IN                                          5
+                                                                              20/09/2026               1000000002                BBPS PAYMENT RECEIVED                                              0                            2,000
+                                                                              02/10/2026               1000000003                EXAMPLE BOOKS 24X7 BENGALURU IN                                   15
+ Statement period : September 13, 2026 to October 12, 2026
+`,
+	Raw: `PAYMENT DUE DATE
+STATEMENT DATE
+` + "`" + `100.00
+` + "`" + `1,250.50
+October 12, 2026
+October 30, 2026
+Date SerNo. Transaction Details Reward
+Points
+Amount (in` + "`" + `)
+4000XXXXXXXX4242
+14/09/2026 1000000001 EXAMPLE TELECOM MUMBAI IN 5 500.25
+20/09/2026 1000000002 BBPS PAYMENT RECEIVED 0 2,000.00 CR
+02/10/2026 1000000003 EXAMPLE BOOKS 24X7 BENGALURU IN 15 750.25
+Statement period : September 13, 2026 to October 12, 2026
+Page 1 of 3
+`,
+}
