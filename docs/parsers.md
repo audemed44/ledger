@@ -92,25 +92,6 @@ triggers is picked up by **Retry backlog**). One that doesn't validate, or
 that no trigger or more than one trigger fits, stays in the inbox with the
 reason. Remove triggers by editing the parser.
 
-- **Passwords**: set `LEDGER_PDF_PASSWORDS=Password1|Password2|…` (up to
-  32; a password can't contain `|`). A parser tries all of them, or one
-  slot. Only the slot number is saved, so reordering the list changes what
-  a slot means. Unencrypted PDFs are always tried first.
-- **Validation**: every dated row in the transaction table must parse, and
-  the debit and credit rows must equal the summary's purchases and
-  payments exactly. The final balance may differ from the summary by up to
-  the parser's tolerance (0–99 paise, default 99) for rounding. Statements
-  with finance charges are flagged until reconciliation can handle them.
-  A statement that fails keeps the rows it could read, for diagnosis, and
-  can't be imported.
-- **One card per statement**: supplementary or ambiguous card numbers are
-  rejected rather than assigned to the primary card.
-- **No duplicates**: the same statement imported again, from the same
-  email or a resent one, changes nothing. A *different* statement for the
-  same account and date is refused.
-- Deleting a statement parser keeps its statements, transactions and
-  emails.
-
 ## Reconciliation
 
 Each statement line is matched to an alert transaction on the same account
@@ -139,9 +120,17 @@ transfer.
 
 ## Supported layouts
 
-- **HDFC Credit Card Parser v1**: the HDFC credit card summary and dated
-  transaction table. It works on the Tata Neu and Regalia layouts; the ₹
-  glyph extracts as `C`.
+Each layout checks the statement's lines against its own totals, and
+refuses a statement with a second card or account in it.
+
+| Layout | Issuer | Checks |
+| --- | --- | --- |
+| **HDFC Credit Card Parser v1** (`hdfc-credit-card`) | HDFC, card | Summary and dated table. Works on the Tata Neu and Regalia layouts; the ₹ glyph extracts as `C` |
+| **Axis Credit Card Parser v1** (`axis-credit-card`) | Axis, card | Previous balance, payments, credits, purchases, cash and other charges against the Dr/Cr lines |
+
+Descriptions that wrap onto the lines around their row are joined back
+together. For alerts and statements to reconcile, give alert parsers the
+issuer in the table (case doesn't matter) and the same account type.
 
 A new layout is code: an adapter in `internal/statements`, built and
 tested against a synthetic copy of the layout. Run `ledger check-statement`
