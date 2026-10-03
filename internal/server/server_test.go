@@ -477,3 +477,31 @@ func TestWidgetListsCardDuesAndMarksThemPaid(t *testing.T) {
 		t.Fatal("test reminder without LEDGER_NOTIFY_URL", w.Code)
 	}
 }
+
+func TestReminderSettingsAreSavedFromTheUI(t *testing.T) {
+	h := (&Server{Store: testStore(t), Token: "1234"}).Handler()
+	call := func(method, path, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer 1234")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w := call("POST", "/api/reminders/settings", `{"days":[31]}`); w.Code != 400 {
+		t.Fatal("accepted 31 days", w.Code)
+	}
+	if w := call("POST", "/api/reminders/settings", `{"days":[3,0],"on_statement":true}`); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var got struct {
+		Reminders struct {
+			Enabled     bool  `json:"enabled"`
+			Days        []int `json:"days"`
+			OnStatement bool  `json:"on_statement"`
+		} `json:"reminders"`
+	}
+	json.Unmarshal(call("GET", "/api/summary", "").Body.Bytes(), &got)
+	if got.Reminders.Enabled || len(got.Reminders.Days) != 2 || got.Reminders.Days[1] != 3 || !got.Reminders.OnStatement {
+		t.Fatalf("%+v", got)
+	}
+}

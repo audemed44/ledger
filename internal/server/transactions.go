@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/audemed44/ledger/internal/ledger"
+	"github.com/audemed44/ledger/internal/reminders"
 	"github.com/audemed44/ledger/internal/store"
 )
 
@@ -125,12 +126,11 @@ type Summary struct {
 	Totals   []store.Total    `json:"totals"`
 	Accounts []ledger.Account `json:"accounts"`
 	Dues     []store.Due      `json:"dues"`
-	// Reminders is whether payment reminders are sent, how many days before
-	// the due date, and whether a new statement sends one too.
+	// Reminders is whether payment reminders are sent (LEDGER_NOTIFY_URL is
+	// set), and their settings.
 	Reminders struct {
-		Enabled     bool  `json:"enabled"`
-		Days        []int `json:"days"`
-		OnStatement bool  `json:"on_statement"`
+		Enabled bool `json:"enabled"`
+		reminders.Settings
 	} `json:"reminders"`
 	Month string `json:"month"`
 	Demo  bool   `json:"demo"`
@@ -151,9 +151,9 @@ func (s *Server) summary() (Summary, error) {
 	if out.Accounts, err = s.Store.Accounts(); err != nil {
 		return out, err
 	}
-	if s.Reminders.Enabled() {
-		out.Reminders.Enabled, out.Reminders.Days = true, s.Reminders.Days
-		out.Reminders.OnStatement = s.Reminders.OnStatement
+	out.Reminders.Enabled = s.Reminders.Enabled()
+	if out.Reminders.Settings, err = reminders.LoadSettings(s.Store); err != nil {
+		return out, err
 	}
 	out.Dues, err = s.Store.Dues(time.Now())
 	return out, err

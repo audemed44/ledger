@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/pr
 import { afterEach, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { CardDues } from "./components/CardDues";
+import { ConnectionPage } from "./components/ConnectionPage";
 import { TransactionsPage } from "./components/TransactionsPage";
 import { money, periodRange, recentMonths } from "./lib";
 const summary = {
@@ -11,7 +12,7 @@ const summary = {
   queued: 0,
   parsers: 0,
   dues: [],
-  reminders: { enabled: false, days: null, on_statement: false },
+  reminders: { enabled: false, days: [0, 1, 5], on_statement: false },
   month: "2026-10",
   demo: false,
 };
@@ -211,4 +212,35 @@ it("lists card dues and marks one paid", async () => {
     due_date: "2026-10-08",
     settled: true,
   });
+});
+
+it("saves reminder days and the new-statement notice from the Connection page", async () => {
+  const calls: { url: string; body: string }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, body: String(init?.body ?? "") });
+      return new Response("{}");
+    }),
+  );
+  const saved = vi.fn();
+  render(
+    <ConnectionPage
+      sync={sync}
+      busy={false}
+      syncNow={() => {}}
+      reminders={{ enabled: true, days: [0, 1, 5], on_statement: false }}
+      saved={saved}
+    />,
+  );
+  const days = screen.getByDisplayValue("5, 1, 0");
+  fireEvent.input(days, { target: { value: "7, x" } });
+  fireEvent.click(screen.getByText("Save reminder settings"));
+  expect(screen.getByText("Enter whole numbers of days, separated by commas")).toBeTruthy();
+  fireEvent.input(days, { target: { value: "7, 2, 0" } });
+  fireEvent.click(screen.getByLabelText("Also notify when a card’s new statement arrives"));
+  fireEvent.click(screen.getByText("Save reminder settings"));
+  await waitFor(() => expect(saved).toHaveBeenCalled());
+  expect(calls[0].url).toBe("/api/reminders/settings");
+  expect(JSON.parse(calls[0].body)).toEqual({ days: [7, 2, 0], on_statement: true });
 });

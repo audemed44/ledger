@@ -25,11 +25,8 @@ services:
       # downloads the statement from it. Set false to upload by hand instead.
       # - LEDGER_FETCH_STATEMENT_LINKS=false
       # Card payment reminders go to an Apprise endpoint (apprise-api, or
-      # Lookout's /notify/<key>), by default 5, 1 and 0 days before the due date.
+      # Lookout's /notify/<key>). Choose the days on the Connection page.
       # - LEDGER_NOTIFY_URL=http://lookout:8080/notify/ledger
-      # - LEDGER_REMINDER_DAYS=5,1,0
-      # Also notify once when a card's new statement arrives.
-      # - LEDGER_REMINDER_ON_STATEMENT=true
       # Session cookies need HTTPS. Set false only for plain-HTTP testing.
       # - LEDGER_SECURE_COOKIES=false
     volumes:

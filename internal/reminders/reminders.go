@@ -39,32 +39,54 @@ const startHour = 9
 type Notifier struct {
 	Store *store.Store
 	// URL is the Apprise endpoint; empty turns reminders off.
-	URL string
-	// Days are how many days before the due date to remind, e.g. 5, 1, 0.
-	Days []int
-	// OnStatement also sends a notice when a card's new statement arrives.
-	OnStatement bool
-	Client      *http.Client
+	URL    string
+	Client *http.Client
 }
 
-// ParseDays reads LEDGER_REMINDER_DAYS: comma-separated days before the
-// due date, each 0–30.
-func ParseDays(value string) ([]int, error) {
-	out := []int{}
-	for _, part := range strings.Split(value, ",") {
-		if part = strings.TrimSpace(part); part == "" {
-			continue
+// Settings are the reminder choices made on the Connection page.
+type Settings struct {
+	// Days are how many days before the due date to remind, e.g. 5, 1, 0.
+	Days []int `json:"days"`
+	// OnStatement also sends a notice when a card's new statement arrives.
+	OnStatement bool `json:"on_statement"`
+}
+
+// settingsKey is where Settings are kept in the settings table.
+const settingsKey = "reminders"
+
+// LoadSettings reads the saved Settings, or the defaults: 5, 1 and 0 days
+// before, and no new-statement notice.
+func LoadSettings(st *store.Store) (Settings, error) {
+	out := Settings{Days: []int{0, 1, 5}}
+	raw, err := st.Setting(settingsKey)
+	if err != nil || raw == "" {
+		return out, err
+	}
+	if err = json.Unmarshal([]byte(raw), &out); err != nil {
+		return Settings{Days: []int{0, 1, 5}}, nil
+	}
+	return out, nil
+}
+
+// SaveSettings checks and stores Settings: each day 0–30, at most 10 of
+// them; they're kept sorted without repeats.
+func SaveSettings(st *store.Store, s Settings) (Settings, error) {
+	days := []int{}
+	for _, d := range s.Days {
+		if d < 0 || d > 30 {
+			return s, fmt.Errorf("%d is not a number of days from 0 to 30", d)
 		}
-		n, err := strconv.Atoi(part)
-		if err != nil || n < 0 || n > 30 {
-			return nil, fmt.Errorf("%q is not a number of days from 0 to 30", part)
-		}
-		if !slices.Contains(out, n) {
-			out = append(out, n)
+		if !slices.Contains(days, d) {
+			days = append(days, d)
 		}
 	}
-	slices.Sort(out)
-	return out, nil
+	if len(days) > 10 {
+		return s, errors.New("Choose at most 10 reminder days")
+	}
+	slices.Sort(days)
+	s.Days = days
+	raw, _ := json.Marshal(s)
+	return s, st.SetSetting(settingsKey, string(raw))
 }
 
 // Enabled reports whether reminders go anywhere.
@@ -90,12 +112,13 @@ func (n *Notifier) Run(ctx context.Context) {
 }
 
 // Step is the reminder due for a statement `days` before its due date, and
-// whether there is one: the nearest configured day it's within, or Overdue.
-func (n *Notifier) Step(days int) (int, bool) {
+// whether there is one: the nearest of the sorted reminder days it's
+// within, or Overdue.
+func Step(reminderDays []int, days int) (int, bool) {
 	if days < 0 {
 		return Overdue, days >= -overdueWindow
 	}
-	for _, d := range n.Days {
+	for _, d := range reminderDays {
 		if days <= d {
 			return d, true
 		}
@@ -109,6 +132,10 @@ func (n *Notifier) Check(ctx context.Context, now time.Time) error {
 	if !n.Enabled() || now.Hour() < startHour {
 		return nil
 	}
+	settings, err := LoadSettings(n.Store)
+	if err != nil {
+		return err
+	}
 	dues, err := n.Store.Dues(now)
 	if err != nil {
 		return err
@@ -118,8 +145,8 @@ func (n *Notifier) Check(ctx context.Context, now time.Time) error {
 		if d.Status == "paid" {
 			continue
 		}
-		step, ok := n.Step(d.Days)
-		if n.OnStatement && d.Days >= 0 {
+		step, ok := Step(settings.Days, d.Days)
+		if settings.OnStatement && d.Days >= 0 {
 			sent, err := n.Store.ReminderSent(d.AccountID, d.DueDate, Statement)
 			if err != nil {
 				errs = append(errs, err)

@@ -252,7 +252,13 @@ export function App() {
           </>
         )}
         {page === "connection" && (
-          <ConnectionPage sync={sync} busy={busy} syncNow={syncNow} reminders={summary.reminders} />
+          <ConnectionPage
+            sync={sync}
+            busy={busy}
+            syncNow={syncNow}
+            reminders={summary.reminders}
+            saved={refresh}
+          />
         )}
       </main>
       <footer>

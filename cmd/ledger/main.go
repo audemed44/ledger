@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -86,17 +85,7 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	days, err := reminders.ParseDays(env("LEDGER_REMINDER_DAYS", "5,1,0"))
-	if err != nil {
-		slog.Error("LEDGER_REMINDER_DAYS: " + err.Error())
-		os.Exit(1)
-	}
-	onStatement, err := strconv.ParseBool(env("LEDGER_REMINDER_ON_STATEMENT", "false"))
-	if err != nil {
-		slog.Error("LEDGER_REMINDER_ON_STATEMENT must be true or false")
-		os.Exit(1)
-	}
-	notifier := &reminders.Notifier{Store: db, URL: os.Getenv("LEDGER_NOTIFY_URL"), Days: days, OnStatement: onStatement}
+	notifier := &reminders.Notifier{Store: db, URL: os.Getenv("LEDGER_NOTIFY_URL")}
 	poller := &gmail.Poller{Store: db, Config: cfg}
 	dist, err := fs.Sub(web.Dist, "dist")
 	if err != nil {

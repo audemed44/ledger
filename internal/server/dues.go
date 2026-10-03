@@ -33,6 +33,18 @@ func (s *Server) dueRoutes(mux *http.ServeMux) {
 		}
 		jsonResponse(w, map[string]string{"message": "Marked paid"})
 	})
+	mux.HandleFunc("POST /api/reminders/settings", func(w http.ResponseWriter, r *http.Request) {
+		var body reminders.Settings
+		if !decode(w, r, &body) {
+			return
+		}
+		saved, err := reminders.SaveSettings(s.Store, body)
+		if err != nil {
+			failure(w, 400, err.Error())
+			return
+		}
+		jsonResponse(w, saved)
+	})
 	mux.HandleFunc("POST /api/reminders/test", func(w http.ResponseWriter, r *http.Request) {
 		if !s.Reminders.Enabled() {
 			failure(w, 409, "Set LEDGER_NOTIFY_URL to send reminders")

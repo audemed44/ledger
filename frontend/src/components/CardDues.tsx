@@ -32,7 +32,11 @@ export function CardDues({ summary, saved }: { summary: Summary; saved: () => vo
       <Section index="01" title="Card dues">
         <a class="chip" href="#connection">
           {summary.reminders.enabled ? <Bell size={11} /> : <BellOff size={11} />}
-          {summary.reminders.enabled ? `Reminders ${days.join(", ")} days before` : "Reminders off"}
+          {!summary.reminders.enabled
+            ? "Reminders off"
+            : days.length
+              ? `Reminders ${days.join(", ")} days before`
+              : "Reminders on"}
         </a>
       </Section>
       <ErrorNote error={error} />
