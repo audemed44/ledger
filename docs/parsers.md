@@ -195,8 +195,30 @@ An alert that arrives after its statement was imported confirms the
 statement line instead of adding another transaction.
 
 Not handled yet: refunds linked to their charge, foreign currency markup
-lines, EMI conversions, and card payments paired with the bank debit as a
-transfer.
+lines and EMI conversions.
+
+## Transfers
+
+Money moving between your own accounts isn't spending: a card bill paid
+from a bank account, UPI from one of your banks to another. Ledger pairs a
+debit on one account with a credit of the same amount and currency on
+another of your accounts, up to 3 days apart, and marks both as a
+**transfer**. Transfers stay in the list (filter **Type → Transfers**) but
+leave the monthly totals and the Foyer widget. Pairing is conservative: if
+either side has more than one candidate it pairs neither, and a later
+transaction that makes a pair ambiguous undoes it.
+
+For money moving to an account Ledger doesn't see, such as SBI's
+auto-sweep into term deposits ("SWEEP TFR DR", "SWEEP TRF CREDT"), open a
+transaction's actions (**⋯**) and choose **Treat everything like this as
+transfers**. That saves a rule for the issuer and descriptions like this
+one (numbers and month names may differ), applied now and to everything
+later. Rules are listed under **Parsers → Transfer rules**; removing one
+counts its transactions again.
+
+**Mark as a transfer** and **Not a transfer** decide by hand. "Not a
+transfer" unpairs both sides, and they're never paired or matched by a
+rule again.
 
 ## Supported layouts
 

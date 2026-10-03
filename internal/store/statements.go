@@ -200,7 +200,10 @@ func (s *Store) ImportStatement(messageID int64, part int, preview PDFPreview, e
 	if _, err = tx.Exec("UPDATE messages SET state=?,reason=? WHERE id=?", state, reason, messageID); err != nil {
 		return out, err
 	}
-	return out, tx.Commit()
+	if err = tx.Commit(); err != nil {
+		return out, err
+	}
+	return out, s.findTransfers()
 }
 
 // reconcile saves a new statement and its lines in tx, matching each line to

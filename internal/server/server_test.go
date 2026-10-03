@@ -362,3 +362,37 @@ func TestParserChangesRereadTheirEmails(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 }
+
+func TestTransferRoutes(t *testing.T) {
+	s := testStore(t)
+	p, _ := s.SaveParser(fixture.AlertParser())
+	_ = p
+	s.Ingest(fixture.Mail("sweep", strings.Replace(fixture.AlertBody, "Example Shop", "SWEEP TFR DR", 1)))
+	rows, _ := s.Transactions(store.Filter{})
+	h := (&Server{Store: s, Token: "1234"}).Handler()
+	call := func(method, path, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer 1234")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w := call("POST", fmt.Sprintf("/api/transactions/%d/transfer-rule", rows[0].ID), ""); w.Code != 200 || !strings.Contains(w.Body.String(), "SWEEP") {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w := call("GET", "/api/transactions?kind=transfers", ""); !strings.Contains(w.Body.String(), `"transfer":"rule"`) {
+		t.Fatal(w.Body.String())
+	}
+	if w := call("GET", "/api/transactions.csv", ""); !strings.Contains(w.Body.String(), ",rule") {
+		t.Fatal(w.Body.String())
+	}
+	if w := call("DELETE", "/api/transfer-rules/1", ""); w.Code != 200 {
+		t.Fatal(w.Code)
+	}
+	if w := call("POST", fmt.Sprintf("/api/transactions/%d/transfer", rows[0].ID), `{"transfer":true}`); w.Code != 200 {
+		t.Fatal(w.Code)
+	}
+	if w := call("GET", "/api/transactions?kind=spending", ""); w.Body.String() != "[]\n" {
+		t.Fatal(w.Body.String())
+	}
+}

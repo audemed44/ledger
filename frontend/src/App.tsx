@@ -5,6 +5,7 @@ import { AlertParserEditor } from "./components/AlertParserEditor";
 import { AlertParsers } from "./components/AlertParsers";
 import { ConnectionPage } from "./components/ConnectionPage";
 import { DebitCards } from "./components/DebitCards";
+import { TransferRules } from "./components/TransferRules";
 import { InboxPage } from "./components/InboxPage";
 import { Login } from "./components/Login";
 import { MessageReview } from "./components/MessageReview";
@@ -209,7 +210,7 @@ export function App() {
                 ) : (
                   <div class="figure-value">—</div>
                 )}
-                <p class="hint">Includes transfers between your accounts</p>
+                <p class="hint">Transfers between your accounts excluded</p>
               </div>
               <div class="figure">
                 <span class="eyebrow">Transactions</span>
@@ -242,6 +243,7 @@ export function App() {
             <AlertParsers version={version} edit={(p) => setEditing({ parser: p })} />
             <StatementParsers />
             <DebitCards saved={refresh} />
+            <TransferRules version={version} saved={refresh} />
           </>
         )}
         {page === "connection" && <ConnectionPage sync={sync} busy={busy} syncNow={syncNow} />}

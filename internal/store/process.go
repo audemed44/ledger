@@ -148,7 +148,7 @@ func (s *Store) Reprocess() (int, error) {
 			return count, err
 		}
 		if len(ids) == 0 {
-			return count, nil
+			return count, s.FindTransfers()
 		}
 		for _, id := range ids {
 			if err = s.process(id); err != nil {

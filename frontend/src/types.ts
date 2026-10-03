@@ -32,6 +32,9 @@ export type Transaction = {
   status: string;
   issuer: string;
   matched?: boolean;
+  placeholder?: boolean;
+  transfer?: "" | "paired" | "rule" | "manual";
+  transfer_of?: number;
 };
 export type Message = {
   id: number;

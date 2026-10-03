@@ -71,7 +71,7 @@ func (s *Store) Ingest(raw []byte) (int64, error) {
 	var id int64
 	err := s.DB.QueryRow("SELECT id FROM messages WHERE message_key=?", m.Key).Scan(&id)
 	if err == nil {
-		return id, s.process(id)
+		return id, s.ingested(id)
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return 0, err
@@ -87,7 +87,15 @@ VALUES(?,?,?,?,?,?,?,?)`, m.Key, m.Sender, m.Subject, m.Date, m.Body, m.Reason, 
 	if err = s.DB.QueryRow("SELECT id FROM messages WHERE message_key=?", m.Key).Scan(&id); err != nil {
 		return 0, err
 	}
-	return id, s.process(id)
+	return id, s.ingested(id)
+}
+
+// ingested processes a newly archived email, then looks for transfers.
+func (s *Store) ingested(id int64) error {
+	if err := s.process(id); err != nil {
+		return err
+	}
+	return s.FindTransfers()
 }
 
 // process runs the alert parsers, then automatic statement import.
