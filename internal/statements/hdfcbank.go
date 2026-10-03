@@ -122,10 +122,10 @@ func parseHDFCBank(t Text, tolerance int64) (Statement, error) {
 			continue
 		}
 		balance += credit - debit
-		if balance != running {
-			rowErrors = append(rowErrors, fmt.Errorf("running balance doesn't follow on line %d", i+1))
-			balance = running
+		if err := follow(&s, balance, running, tolerance, i+1); err != nil {
+			rowErrors = append(rowErrors, err)
 		}
+		balance = running
 		if credit > 0 {
 			creditRows++
 		} else {

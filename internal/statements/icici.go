@@ -79,12 +79,18 @@ func parseICICI(t Text, tolerance int64) (Statement, error) {
 
 	var debits, credits int64
 	var rowErrors []error
-	for i, l := range strings.Split(t.Raw, "\n") {
+	raw := strings.Split(t.Raw, "\n")
+	for i, l := range raw {
 		l = strings.TrimSpace(l)
 		if !iciciDated.MatchString(l) {
 			continue
 		}
 		m := iciciRow.FindStringSubmatch(l)
+		// A long merchant wraps the row onto the next lines.
+		for j := i + 1; m == nil && j < min(i+4, len(raw)) && !iciciDated.MatchString(strings.TrimSpace(raw[j])); j++ {
+			l += " " + strings.TrimSpace(raw[j])
+			m = iciciRow.FindStringSubmatch(l)
+		}
 		if m == nil {
 			rowErrors = append(rowErrors, fmt.Errorf("unparsed transaction on raw line %d", i+1))
 			continue

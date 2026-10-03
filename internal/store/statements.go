@@ -114,8 +114,7 @@ const firstStatementDays = 28
 // different statement for the same account and date blocks the import.
 func (s *Store) ImportStatement(messageID int64, part int, preview PDFPreview, expected string) (StatementImport, error) {
 	out := StatementImport{}
-	if preview.ParseError != "" || preview.Statement == nil || !preview.Statement.Balanced ||
-		len(preview.Statement.Transactions) == 0 {
+	if preview.ParseError != "" || preview.Statement == nil || !preview.Statement.Balanced {
 		return out, errors.New("Statement validation must pass before importing; review the extracted rows and error")
 	}
 	st := *preview.Statement

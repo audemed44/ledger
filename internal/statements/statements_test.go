@@ -163,3 +163,17 @@ DATE & TIME                              TRANSACTION DESCRIPTION                
 		t.Fatal(got)
 	}
 }
+
+// Tables can start with the cardholder's name alone (no CKYC ID), right
+// above a wrapped description; it isn't part of it.
+func TestStatementCardholderLineInTable(t *testing.T) {
+	text := strings.NewReplacer(
+		"Credit Card No. 111111xxxxxx4242", "EXAMPLE PERSON                 Credit Card No. 111111xxxxxx4242",
+		"01/10/2026| 16:10   CREDIT CARD PAYMENT (Ref# 123456)       + C 600.00 l",
+		"            EXAMPLE PERSON\n            CREDIT CARD PAYMENT (Ref#\n01/10/2026| 16:10                                  + C 600.00 l\n            123456)",
+	).Replace(statement)
+	s, err := ParseHDFC(text)
+	if err != nil || !s.Balanced || s.Transactions[2].Merchant != "CREDIT CARD PAYMENT (Ref# 123456)" {
+		t.Fatalf("%+v %v", s.Transactions, err)
+	}
+}
