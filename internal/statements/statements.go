@@ -123,6 +123,11 @@ var Adapters = []Adapter{{
 	Name:        "SBI Savings Account Parser v1",
 	Description: "SBI account statement's transaction overview, with running balances",
 	parse:       parseSBI,
+}, {
+	ID:          "hdfc-savings",
+	Name:        "HDFC Bank Account Parser v1",
+	Description: "HDFC Bank account statement rows and summary, with running balances",
+	parse:       parseHDFCBank,
 }}
 
 // adapter finds a layout by ID.
