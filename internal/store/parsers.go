@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/audemed44/ledger/internal/alerts"
@@ -75,6 +76,9 @@ func (s *Store) StatementParsers() ([]statements.Parser, error) {
 			return nil, err
 		}
 		p.ID = id
+		if p.Triggers == nil {
+			p.Triggers = []statements.Trigger{}
+		}
 		out = append(out, p)
 	}
 	return out, rows.Err()
@@ -159,4 +163,54 @@ func (s *Store) deleteDefinition(table string, id int64) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+// AddStatementTrigger makes a preset import statements like the PDF in MIME
+// part `part` of a message by itself. It's refused when another preset
+// would import that PDF too. Adding a trigger it already has changes nothing.
+func (s *Store) AddStatementTrigger(parserID, messageID int64, part int) (statements.Trigger, error) {
+	m, err := s.ReviewMessage(messageID)
+	if err != nil {
+		return statements.Trigger{}, err
+	}
+	name := ""
+	for _, a := range m.Attachments {
+		if a.Part == part {
+			name = a.Name
+		}
+	}
+	t := statements.TriggerFor(m.Sender, m.Subject, name)
+	if err = t.Validate(); err != nil {
+		return t, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	parsers, err := s.StatementParsers()
+	if err != nil {
+		return t, err
+	}
+	var target *statements.Parser
+	for i, p := range parsers {
+		if p.ID == parserID {
+			target = &parsers[i]
+		} else if p.Matches(m.Sender, m.Subject, name) {
+			return t, fmt.Errorf("%s already imports statements like this one automatically", p.Name)
+		}
+	}
+	if target == nil {
+		return t, sql.ErrNoRows
+	}
+	if target.Matches(m.Sender, m.Subject, name) {
+		return t, nil
+	}
+	target.Triggers = append(target.Triggers, t)
+	if err = target.Validate(); err != nil {
+		return t, err
+	}
+	raw, err := json.Marshal(target)
+	if err != nil {
+		return t, err
+	}
+	_, err = s.saveDefinition("statement_parsers", target.ID, raw)
+	return t, err
 }

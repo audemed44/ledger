@@ -22,7 +22,7 @@ email archived intact under `/data/archive`.
 - `internal/statements`: PDF extraction (qpdf, pdftotext) and the
   issuer-specific statement layouts.
 - `internal/store`: the database and archive: ingest, processing, parsers,
-  statement import, migrations.
+  statement import (automatic and by hand), reconciliation, migrations.
 - `internal/server`: HTTP API, auth, the Foyer widget.
 - `internal/fixture`: synthetic emails, statements and PDFs for tests.
 

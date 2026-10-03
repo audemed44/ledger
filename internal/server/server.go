@@ -24,9 +24,6 @@ type Server struct {
 	SecureCookies bool
 	Demo          bool
 	Files         fs.FS
-	// PDFPasswords are the LEDGER_PDF_PASSWORDS slots. They're used on the
-	// server only; the API exposes which slots are set, never their values.
-	PDFPasswords []string
 }
 
 const contentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +

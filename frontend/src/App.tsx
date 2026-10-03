@@ -208,7 +208,7 @@ export function App() {
                 ) : (
                   <div class="figure-value">—</div>
                 )}
-                <p class="hint">Provisional · includes transfers until reconciliation</p>
+                <p class="hint">Includes transfers between your accounts</p>
               </div>
               <div class="figure">
                 <span class="eyebrow">Transactions</span>

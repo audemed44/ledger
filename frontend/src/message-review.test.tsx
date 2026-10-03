@@ -288,10 +288,13 @@ it("imports only after an explicit action and refreshes the ledger", async () =>
       const body = JSON.parse(options?.body as string);
       if (body.import) {
         expect(body.fingerprint).toBe(result.fingerprint);
+        expect(body.automatic).toBe(true);
         importRequests++;
         return reply({
           ...result,
-          imported: { statement_id: 1, count: 1, already_imported: false },
+          parser_name: preset.name,
+          automatic: true,
+          imported: { statement_id: 1, count: 1, matched: 1, flagged: 0, already_imported: false },
         });
       }
       return reply(result);
@@ -320,7 +323,8 @@ it("imports only after an explicit action and refreshes the ledger", async () =>
   expect(importRequests).toBe(0);
   expect(screen.getByText("EXAMPLE SHOP")).toBeTruthy();
   fireEvent.click(button);
-  await screen.findByText(/Imported: 1 transactions/);
+  await screen.findByText(/Imported: 1 transactions. 1 confirmed an alert/);
+  expect(screen.getByText(/will import statements like this one by itself/)).toBeTruthy();
   expect(importRequests).toBe(1);
   expect(imported).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole("button", { name: "Import 1 transactions" })).toBeNull();

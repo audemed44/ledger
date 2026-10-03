@@ -19,17 +19,20 @@ binary that idles at about 11 MB of RAM.
 - **PDF statements**: decrypted with passwords from the environment,
   extracted with `pdftotext`, and parsed by an issuer-specific layout. Rows
   must add up to the statement's summary before anything can be imported.
-  Supported today: HDFC credit cards.
+  Import the first one by hand; later ones import themselves. Supported
+  today: HDFC credit cards.
+- **Reconciliation**: a statement line confirms the alert for it, lines
+  with no alert are added, and alerts missing from the statement are
+  flagged.
 - **Nothing lost**: mail no parser understands waits in the inbox with the
   reason, and so do statements that don't validate.
 - **Transactions**: filter by account, status and date, search, export CSV.
   Money is kept in integer paise, per currency.
 - **Foyer**: a widget with this month's debits and what needs review.
 
-Still to come: reconciling alerts with statements, categories and charts,
-card due dates (iCal and reminders), and subscription detection. Until
-reconciliation lands, alerts stay provisional and the monthly total is all
-debits, card payments and transfers included.
+Still to come: more statement layouts, categories and charts, card due
+dates (iCal and reminders), and subscription detection. Card payments and
+transfers between your own accounts still count in the monthly total.
 
 ## Install
 

@@ -1,7 +1,9 @@
 package server
 
 import (
+	"database/sql"
 	"encoding/csv"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -29,6 +31,25 @@ func (s *Server) transactionRoutes(mux *http.ServeMux) {
 		jsonResponse(w, rows)
 	})
 	mux.HandleFunc("GET /api/transactions.csv", s.csv)
+	// A flagged alert transaction can be dismissed, or restored.
+	mux.HandleFunc("POST /api/transactions/{id}/dismiss", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Dismissed bool `json:"dismissed"`
+		}
+		if !decode(w, r, &body) {
+			return
+		}
+		err := s.Store.Dismiss(pathID(r), body.Dismissed)
+		if errors.Is(err, sql.ErrNoRows) {
+			failure(w, 409, "Only flagged transactions can be dismissed, and only dismissed ones restored")
+			return
+		}
+		if err != nil {
+			failure(w, 500, "Could not update transaction")
+			return
+		}
+		jsonResponse(w, map[string]bool{"ok": true})
+	})
 }
 
 func filter(r *http.Request) store.Filter {

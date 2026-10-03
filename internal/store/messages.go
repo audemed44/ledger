@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -70,7 +71,7 @@ func (s *Store) Ingest(raw []byte) (int64, error) {
 	var id int64
 	err := s.DB.QueryRow("SELECT id FROM messages WHERE message_key=?", m.Key).Scan(&id)
 	if err == nil {
-		return id, s.Process(id)
+		return id, s.process(id)
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return 0, err
@@ -86,7 +87,15 @@ VALUES(?,?,?,?,?,?,?,?)`, m.Key, m.Sender, m.Subject, m.Date, m.Body, m.Reason, 
 	if err = s.DB.QueryRow("SELECT id FROM messages WHERE message_key=?", m.Key).Scan(&id); err != nil {
 		return 0, err
 	}
-	return id, s.Process(id)
+	return id, s.process(id)
+}
+
+// process runs the alert parsers, then automatic statement import.
+func (s *Store) process(id int64) error {
+	if err := s.Process(id); err != nil {
+		return err
+	}
+	return s.AutoImport(context.Background(), id)
 }
 
 // writeArchive writes the file atomically: a synced temporary file renamed

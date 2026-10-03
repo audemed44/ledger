@@ -12,7 +12,8 @@ import (
 func (s *Server) statementRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/pdf-config", func(w http.ResponseWriter, r *http.Request) {
 		slots := []int{}
-		for i, p := range s.PDFPasswords {
+		// The API exposes which slots are set, never their values.
+		for i, p := range s.Store.PDFPasswords {
 			if p != "" {
 				slots = append(slots, i+1)
 			}
@@ -77,6 +78,9 @@ func (s *Server) statementRoutes(mux *http.ServeMux) {
 			ParserID    int64  `json:"parser_id"`
 			Import      bool   `json:"import"`
 			Fingerprint string `json:"fingerprint"`
+			// Automatic also makes the parser import statements like this
+			// one by themselves, once this one is imported.
+			Automatic bool `json:"automatic"`
 		}
 		if !decode(w, r, &body) {
 			return
@@ -107,7 +111,7 @@ func (s *Server) statementRoutes(mux *http.ServeMux) {
 			return
 		}
 		id := pathID(r)
-		result, err := s.Store.PreviewPDF(r.Context(), id, body.Part, parser, s.PDFPasswords)
+		result, err := s.Store.PreviewPDF(r.Context(), id, body.Part, parser, s.Store.PDFPasswords)
 		if err != nil {
 			failure(w, 422, err.Error())
 			return
@@ -119,6 +123,13 @@ func (s *Server) statementRoutes(mux *http.ServeMux) {
 				return
 			}
 			result.Imported = &imported
+			if body.Automatic && parser != nil {
+				if _, err = s.Store.AddStatementTrigger(parser.ID, id, body.Part); err != nil {
+					result.AutomaticError = err.Error()
+				} else {
+					result.Automatic = true
+				}
+			}
 		}
 		jsonResponse(w, result)
 	})
@@ -126,5 +137,6 @@ func (s *Server) statementRoutes(mux *http.ServeMux) {
 
 // passwordSlotSet reports whether slot is 0 (try all) or a configured password.
 func (s *Server) passwordSlotSet(slot int) bool {
-	return slot == 0 || (slot <= len(s.PDFPasswords) && s.PDFPasswords[slot-1] != "")
+	passwords := s.Store.PDFPasswords
+	return slot == 0 || (slot <= len(passwords) && passwords[slot-1] != "")
 }

@@ -116,6 +116,39 @@ export function StatementParserForm({
           {error}
         </p>
       )}
+      <fieldset class="field triggers">
+        <legend class="eyebrow">Automatic imports</legend>
+        {parser.triggers?.length ? (
+          parser.triggers.map((t, i) => (
+            <div class="trigger" key={i}>
+              <span>
+                {t.sender}
+                <span class="hint mono">
+                  Subject {t.subject || "(any)"} · File {t.filename || "(any)"}
+                </span>
+              </span>
+              <button
+                type="button"
+                class="btn"
+                aria-label={`Stop importing from ${t.sender} automatically`}
+                onClick={() =>
+                  setParser((p) => ({
+                    ...p,
+                    triggers: (p.triggers || []).filter((_, j) => j !== i),
+                  }))
+                }
+              >
+                Remove
+              </button>
+            </div>
+          ))
+        ) : (
+          <span class="hint">
+            None. Import a statement by hand with “Import future statements like this automatically”
+            ticked to add one.
+          </span>
+        )}
+      </fieldset>
       <p class="hint">
         A parser is reusable across statements. Saving this configuration does not import
         transactions.
@@ -186,9 +219,9 @@ export function StatementParsers() {
         </button>
       </div>
       <p class="hint">
-        Named, issuer-specific layouts. Review a PDF in the Inbox to extract its text and check its
-        transactions, then explicitly import a validated statement. Reuse an existing parser for the
-        next email.
+        Named, issuer-specific layouts. Import the first statement by hand from the Inbox; after
+        that, statements from the same sender with a similar subject and file name import by
+        themselves when they validate. Anything that doesn’t stays in the Inbox.
       </p>
       {error && (
         <p class="notice error" role="alert">
@@ -217,6 +250,11 @@ export function StatementParsers() {
               <div class="eyebrow">PDF STATEMENT</div>
               <h3>{p.name}</h3>
               <p class="hint">{passwordLabel(p.password_slot)}</p>
+              <p class="hint">
+                {p.triggers?.length
+                  ? `Imports automatically from ${[...new Set(p.triggers.map((t) => t.sender))].join(", ")}`
+                  : "Imports by hand only"}
+              </p>
             </button>
           ))}
         </div>

@@ -23,6 +23,10 @@ type PDFPreview struct {
 	ParserName   string                `json:"parser_name,omitempty"`
 	Statement    *statements.Statement `json:"statement,omitempty"`
 	ParseError   string                `json:"parse_error,omitempty"`
+	// Automatic is set once an import also saved an automatic import, and
+	// AutomaticError says why one couldn't be saved.
+	Automatic      bool   `json:"automatic,omitempty"`
+	AutomaticError string `json:"automatic_error,omitempty"`
 }
 
 // PreviewPDF extracts the PDF in MIME part `part` of a message and, when p
@@ -52,6 +56,8 @@ func (s *Store) PreviewPDF(ctx context.Context, id int64, part int, p *statement
 	if p != nil {
 		slot = p.PasswordSlot
 	}
+	s.pdf.Lock()
+	defer s.pdf.Unlock()
 	out.Text, out.PasswordSlot, err = statements.ExtractWithPasswords(ctx, f.Name(), passwords, slot)
 	if err != nil {
 		return out, err
@@ -70,20 +76,41 @@ func (s *Store) PreviewPDF(ctx context.Context, id int64, part int, p *statement
 	return out, nil
 }
 
-// StatementImport is the result of importing a statement.
+// StatementImport is the result of importing a statement: how many lines it
+// had, how many confirmed an alert transaction, and how many alerts in its
+// period weren't on it and are now flagged.
 type StatementImport struct {
 	StatementID     int64 `json:"statement_id"`
 	Count           int   `json:"count"`
+	Matched         int   `json:"matched"`
+	Flagged         int   `json:"flagged"`
 	AlreadyImported bool  `json:"already_imported"`
 }
+
+// MatchWindowDays is how far apart an alert's date and its statement line's
+// date can be.
+const MatchWindowDays = 3
+
+// postingGraceDays is how long before the statement date an alert may still
+// be waiting to post; such alerts aren't flagged yet.
+const postingGraceDays = 3
+
+// firstStatementDays is how far back the first statement imported for an
+// account is taken to reach, when flagging alerts it doesn't contain.
+const firstStatementDays = 28
 
 // ImportStatement saves a validated statement and all its rows atomically.
 // preview must be freshly parsed on the server (never rows from a client),
 // and expected the fingerprint the user reviewed.
 //
+// Each line is reconciled: a provisional alert transaction on the same
+// account with the same amount, currency and direction, dated within
+// MatchWindowDays, becomes that line, confirmed. Lines without an alert are
+// added. Alerts in the statement's period that it doesn't contain are
+// flagged.
+//
 // Importing the same statement again, from any email, changes nothing. A
-// different statement for the same account and date, or a row that might
-// duplicate an existing transaction, blocks the whole import.
+// different statement for the same account and date blocks the import.
 func (s *Store) ImportStatement(messageID int64, part int, preview PDFPreview, expected string) (StatementImport, error) {
 	out := StatementImport{}
 	if preview.ParseError != "" || preview.Statement == nil || !preview.Statement.Balanced ||
@@ -127,42 +154,9 @@ func (s *Store) ImportStatement(messageID int64, part int, preview PDFPreview, e
 	case !errors.Is(err, sql.ErrNoRows):
 		return out, err
 	default:
-		// Conservative overlap check: don't guess whether similar alert and
-		// statement rows are the same purchase.
-		for _, row := range st.Transactions {
-			var count int
-			err = tx.QueryRow(`SELECT count(*) FROM transactions
-WHERE account=? AND (lower(trim(issuer))=lower(trim(?)) OR account_kind='unknown')
-  AND (account_kind=? OR account_kind='unknown')
-  AND amount=? AND currency=? AND direction=? AND substr(date,1,10)=?`,
-				row.Account, row.Issuer, row.AccountKind, row.Amount, row.Currency, row.Direction, row.Date[:10]).Scan(&count)
-			if err != nil {
-				return out, err
-			}
-			if count > 0 {
-				return out, errors.New("Possible overlap with existing transactions for this account suffix, date and amount; nothing imported. Reconciliation is required")
-			}
-		}
-		raw, err := json.Marshal(st)
+		out.StatementID, out.Matched, out.Flagged, err = reconcile(tx, messageID, part, st, fingerprint)
 		if err != nil {
 			return out, err
-		}
-		result, err := tx.Exec("INSERT INTO statements(account_key,date,fingerprint,snapshot) VALUES(?,?,?,?)",
-			st.AccountID, st.Date, fingerprint, string(raw))
-		if err != nil {
-			return out, err
-		}
-		if out.StatementID, err = result.LastInsertId(); err != nil {
-			return out, err
-		}
-		for index, row := range st.Transactions {
-			_, err = tx.Exec(`INSERT INTO transactions(message_id,source_part,row_index,statement_id,merchant,account,amount,currency,direction,date,reference,status,issuer,account_kind)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-				messageID, part, index+1, out.StatementID, row.Merchant, row.Account, row.Amount, row.Currency,
-				row.Direction, row.Date, row.Reference, "confirmed", row.Issuer, row.AccountKind)
-			if err != nil {
-				return out, err
-			}
 		}
 	}
 	out.Count = len(st.Transactions)
@@ -206,4 +200,75 @@ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		return out, err
 	}
 	return out, tx.Commit()
+}
+
+// reconcile saves a new statement and its lines in tx, matching each line to
+// an alert transaction where one fits, then flags the period's alerts that
+// weren't on it.
+func reconcile(tx *sql.Tx, messageID int64, part int, st statements.Statement, fingerprint string) (id int64, matched, flagged int, err error) {
+	// The period starts where the account's previous statement's grace
+	// window did, or firstStatementDays back.
+	var previous sql.NullString
+	err = tx.QueryRow("SELECT max(date) FROM statements WHERE account_key=? AND date<?", st.AccountID, st.Date).Scan(&previous)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	from, back := st.Date, firstStatementDays
+	if previous.Valid {
+		from, back = previous.String, postingGraceDays
+	}
+
+	raw, err := json.Marshal(st)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	result, err := tx.Exec("INSERT INTO statements(account_key,date,fingerprint,snapshot) VALUES(?,?,?,?)",
+		st.AccountID, st.Date, fingerprint, string(raw))
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	if id, err = result.LastInsertId(); err != nil {
+		return 0, 0, 0, err
+	}
+	for index, row := range st.Transactions {
+		day := row.Date[:10]
+		var alert int64
+		err = tx.QueryRow(`SELECT id FROM transactions
+WHERE statement_id IS NULL AND status IN ('provisional','flagged','dismissed')
+  AND account=? AND (lower(trim(issuer))=lower(trim(?)) OR account_kind='unknown')
+  AND (account_kind=? OR account_kind='unknown')
+  AND amount=? AND currency=? AND direction=?
+  AND abs(julianday(substr(date,1,10))-julianday(?))<=?
+ORDER BY (reference<>'' AND reference=?) DESC, abs(julianday(substr(date,1,10))-julianday(?)), id LIMIT 1`,
+			row.Account, row.Issuer, row.AccountKind, row.Amount, row.Currency, row.Direction,
+			day, MatchWindowDays, row.Reference, day).Scan(&alert)
+		switch {
+		case err == nil:
+			// The alert's own merchant name and date are kept.
+			_, err = tx.Exec("UPDATE transactions SET status='confirmed',statement_id=?,row_index=? WHERE id=?",
+				id, index+1, alert)
+			matched++
+		case errors.Is(err, sql.ErrNoRows):
+			_, err = tx.Exec(`INSERT INTO transactions(message_id,source_part,row_index,statement_id,merchant,account,amount,currency,direction,date,reference,status,issuer,account_kind)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+				messageID, part, index+1, id, row.Merchant, row.Account, row.Amount, row.Currency,
+				row.Direction, row.Date, row.Reference, "confirmed", row.Issuer, row.AccountKind)
+		}
+		if err != nil {
+			return 0, 0, 0, err
+		}
+	}
+
+	r, err := tx.Exec(`UPDATE transactions SET status='flagged'
+WHERE statement_id IS NULL AND status='provisional'
+  AND account=? AND (lower(trim(issuer))=lower(trim(?)) OR account_kind='unknown')
+  AND (account_kind=? OR account_kind='unknown')
+  AND substr(date,1,10)>date(?,?) AND substr(date,1,10)<=date(?,?)`,
+		st.Account, st.Issuer, st.AccountKind, from, fmt.Sprintf("-%d days", back),
+		st.Date, fmt.Sprintf("-%d days", postingGraceDays))
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	n, err := r.RowsAffected()
+	return id, matched, int(n), err
 }

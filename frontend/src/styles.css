@@ -1229,6 +1229,42 @@ footer a {
   margin-bottom: 16px;
 }
 
+/* Statement parsers' automatic imports. */
+.triggers {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.trigger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  min-width: 0;
+}
+.trigger > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.trigger .hint {
+  display: block;
+  font-size: 10px;
+}
+
+.chip.flagged {
+  border-color: #d9a35b;
+  color: #d9a35b;
+}
+.chip.dismissed {
+  text-decoration: line-through;
+}
+.transaction-status .text-link {
+  margin-left: 8px;
+  font-size: 10px;
+}
 @media (max-width: 680px) {
   .tag-buttons {
     grid-template-columns: repeat(2, minmax(0, 1fr));
