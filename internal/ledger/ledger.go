@@ -29,6 +29,9 @@ type Transaction struct {
 	Issuer      string `json:"issuer"`
 	// Matched is set when an alert and a statement line are both behind it.
 	Matched bool `json:"matched,omitempty"`
+	// Placeholder is set when Merchant is the parser's description, the
+	// email having named no merchant.
+	Placeholder bool `json:"placeholder,omitempty"`
 }
 
 // Account is a card or bank account, identified by issuer, type and the last

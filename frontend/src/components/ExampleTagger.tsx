@@ -12,8 +12,15 @@ export const tagFields = [
   { field: "reference", label: "Reference", required: false },
 ];
 
-export function missingFields(marks: Mark[]) {
-  return tagFields.filter((f) => f.required && !marks.some((m) => m.field === f.field));
+// missingFields lists required fields not yet tagged. With a description,
+// the merchant is optional: the email may not name one.
+export function missingFields(marks: Mark[], description = "") {
+  return tagFields.filter(
+    (f) =>
+      f.required &&
+      !(f.field === "merchant" && description.trim()) &&
+      !marks.some((m) => m.field === f.field),
+  );
 }
 
 // offset is how many characters of the container's text come before

@@ -561,3 +561,38 @@ it("re-reads a parser's emails when its mistake is fixed", async () => {
   await waitFor(() => expect(saved).toHaveBeenCalled());
   expect(saveURL).toBe("/api/parsers?reread=1");
 });
+
+it("builds a parser for alerts that name no merchant", async () => {
+  let request: any;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
+    if (url === "/api/parsers/from-example") {
+      request = JSON.parse(options?.body as string);
+      return reply({ pattern: "GENERATED", date_layout: "2-Jan-2006", subject: "" });
+    }
+    return reply({ matched: false, ignored: false });
+  });
+  const body = "We have received payment of INR 600.00 on card 4242 on 01-Oct-2026.";
+  render(
+    <AlertParserEditor
+      initial={{ ...blankParser }}
+      message={{ ...message, body }}
+      close={() => {}}
+      saved={() => {}}
+    />,
+  );
+  const text = screen.getByLabelText("Email text");
+  for (const [label, value] of [
+    ["Amount", "600.00"],
+    ["Card / account", "4242"],
+    ["Date", "01-Oct-2026"],
+  ]) {
+    await act(async () => select(text, value));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp("^" + label) }));
+  }
+  expect(screen.getByText(/Still to tag: Merchant/)).toBeTruthy();
+  fireEvent.input(screen.getByLabelText(/Description when the email names no merchant/), {
+    target: { value: "Payment received" },
+  });
+  await waitFor(() => expect(request).toBeTruthy());
+  expect(request.marks.map((m: any) => m.field)).toEqual(["amount", "account", "date"]);
+});

@@ -68,7 +68,7 @@ export function AlertParserEditor({
   // Tagging every required field writes the body pattern and date layout.
   useEffect(() => {
     setExampleError("");
-    if (!marks.length || missingFields(marks).length) return;
+    if (!marks.length || missingFields(marks, parser.description).length) return;
     let live = true;
     api<Example>("parsers/from-example", { subject, body, marks })
       .then((e) => {
@@ -91,8 +91,8 @@ export function AlertParserEditor({
     return () => {
       live = false;
     };
-  }, [JSON.stringify(marks), body, subject]);
-  const missing = missingFields(marks);
+  }, [JSON.stringify(marks), body, subject, !!parser.description?.trim()]);
+  const missing = missingFields(marks, parser.description);
   function update<K extends keyof Parser>(key: K, value: Parser[K]) {
     setParser((p) => ({ ...p, [key]: value }));
     setSavedID(0);
@@ -221,6 +221,17 @@ export function AlertParserEditor({
               </select>
             </Field>
           </div>
+          <Field
+            label="Description when the email names no merchant"
+            hint="For alerts like “Payment received on your card”: leave Merchant untagged. A statement line that confirms the transaction replaces it."
+          >
+            <input
+              value={parser.description || ""}
+              maxLength={100}
+              placeholder="Payment received"
+              onInput={(e) => update("description", e.currentTarget.value)}
+            />
+          </Field>
           <details
             class="advanced"
             open={advanced}
