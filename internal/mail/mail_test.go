@@ -39,3 +39,13 @@ func TestSenderWithEmptyEncodedName(t *testing.T) {
 		t.Fatal("ambiguous sender accepted", m.Sender)
 	}
 }
+
+// Axis declares UTF-8 but sends a Latin-1 non-breaking space, with CRLF
+// line endings: the text is repaired so patterns can match it.
+func TestTextRepairsLatin1SpacesAndLineEndings(t *testing.T) {
+	m := Decode([]byte("From: alerts@example.invalid\r\nContent-Type: text/plain; charset=utf-8\r\n" +
+		"Content-Transfer-Encoding: quoted-printable\r\n\r\nAmount: INR=A0537\r\nCard: XX4242 \r\nPaid=C2=A0to: Shop\r\n"))
+	if m.Body != "Amount: INR 537\nCard: XX4242\nPaid to: Shop\n\n" {
+		t.Fatalf("%q", m.Body)
+	}
+}

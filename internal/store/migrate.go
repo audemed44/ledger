@@ -182,7 +182,7 @@ WHERE state='queued' AND substr(date,1,10) < ? AND date GLOB '????-??-??T*' AND 
 // cursor, IDs, transactions and archives stay intact, and a missing archive
 // stays visible on its message rather than stopping startup.
 func (s *Store) recoverArchivedText() error {
-	const version = "html-text-pdf-v2"
+	const version = "html-text-pdf-v3"
 	saved, err := s.Setting("mail-text-version")
 	if err != nil || saved == version {
 		return err
