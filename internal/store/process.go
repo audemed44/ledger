@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/audemed44/ledger/internal/alerts"
+	"github.com/audemed44/ledger/internal/ledger"
 	"github.com/audemed44/ledger/internal/mail"
 	"github.com/audemed44/ledger/internal/statements"
 )
@@ -69,6 +70,23 @@ func (s *Store) Process(id int64) error {
 		return err
 	}
 
+	if t := chosen.Transaction; t != nil && t.AccountKind == "debit" {
+		// A debit card's transactions belong to its bank account.
+		account, err := s.linkedAccount(t.Issuer, t.Account)
+		if errors.Is(err, sql.ErrNoRows) {
+			_, err = s.DB.Exec("UPDATE messages SET reason=? WHERE id=?", fmt.Sprintf(
+				"%s debit card ••%s isn't linked to a bank account; link it under Parsers → Debit cards, then retry", t.Issuer, t.Account), id)
+			return err
+		}
+		if err != nil {
+			return err
+		}
+		if t.Reference == "" {
+			t.Reference = "Debit card ••" + t.Account
+		}
+		t.Account, t.AccountKind = account, "bank"
+		t.AccountID = ledger.AccountKey(t.Issuer, "bank", account)
+	}
 	tx, err := s.DB.Begin()
 	if err != nil {
 		return err

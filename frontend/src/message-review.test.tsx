@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/preact";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AlertParserEditor } from "./components/AlertParserEditor";
+import { DebitCards } from "./components/DebitCards";
 import { MessageReview } from "./components/MessageReview";
 import { blankParser } from "./lib";
 import { App } from "./App";
@@ -511,4 +512,26 @@ it("ignores emails like this one after confirming", async () => {
   await waitFor(() => expect(closed).toHaveBeenCalled());
   expect(fetcher.mock.calls[0][0]).toBe("/api/messages/1/ignore");
   expect(done).toHaveBeenCalled();
+});
+
+it("links a debit card to its bank account", async () => {
+  const saved = vi.fn();
+  let links: unknown[] = [];
+  let posted: any;
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
+    if (url === "/api/card-links" && options?.method === "POST") {
+      posted = JSON.parse(options.body as string);
+      links = [posted];
+      return reply({ ok: true });
+    }
+    return reply(links);
+  });
+  render(<DebitCards saved={saved} />);
+  fireEvent.input(screen.getByLabelText(/Issuer/), { target: { value: "HDFC" } });
+  fireEvent.input(screen.getByLabelText(/Card, last 4/), { target: { value: "4242" } });
+  fireEvent.input(screen.getByLabelText(/Bank account, last 4/), { target: { value: "9001" } });
+  fireEvent.click(screen.getByRole("button", { name: "Link card" }));
+  await screen.findByText("HDFC debit card •• 4242");
+  expect(posted).toEqual({ issuer: "HDFC", card: "4242", account: "9001" });
+  expect(saved).toHaveBeenCalled();
 });

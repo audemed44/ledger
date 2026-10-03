@@ -1295,3 +1295,19 @@ label.btn.disabled {
   opacity: 0.5;
   cursor: default;
 }
+.card-link-form {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr auto;
+  gap: 14px;
+  align-items: end;
+  margin-top: 18px;
+}
+@media (max-width: 680px) {
+  .card-link-form {
+    grid-template-columns: 1fr 1fr;
+  }
+  .card-link-form .field:first-child,
+  .card-link-form .btn {
+    grid-column: 1 / -1;
+  }
+}

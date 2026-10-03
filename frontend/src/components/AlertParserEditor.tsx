@@ -166,6 +166,7 @@ export function AlertParserEditor({
               >
                 <option value="card">Credit card</option>
                 <option value="bank">Bank account</option>
+                <option value="debit">Debit card (recorded on its bank account)</option>
                 <option value="unknown">Unknown (legacy rule)</option>
               </select>
             </Field>
@@ -346,7 +347,9 @@ export function AlertParserEditor({
                     ? "Bank account"
                     : preview.transaction.account_kind === "card"
                       ? "Credit card"
-                      : "Account"}{" "}
+                      : preview.transaction.account_kind === "debit"
+                        ? "Debit card"
+                        : "Account"}{" "}
                   · •• {preview.transaction.account}
                 </p>
                 <p class="hint">

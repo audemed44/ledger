@@ -21,7 +21,9 @@ CREATE TABLE IF NOT EXISTS transactions(
   currency TEXT NOT NULL, direction TEXT NOT NULL, date TEXT NOT NULL, reference TEXT NOT NULL,
   status TEXT NOT NULL, issuer TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS transactions_date ON transactions(date);
-CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);`
+CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS card_links(
+  issuer TEXT NOT NULL, card TEXT NOT NULL, account TEXT NOT NULL, PRIMARY KEY(issuer,card));`
 
 // migrate creates the schema and runs each upgrade. Every step is
 // idempotent, so it runs on every start.

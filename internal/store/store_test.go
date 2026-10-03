@@ -856,3 +856,33 @@ func TestIgnoreEmailsLikeThis(t *testing.T) {
 		t.Fatal("ignored mail became transactions")
 	}
 }
+
+func TestDebitCardAlertsLandOnTheLinkedAccount(t *testing.T) {
+	s := testStore(t)
+	p := fixture.AlertParser()
+	p.Issuer, p.AccountKind = "HDFC", "debit"
+	s.SaveParser(p)
+	// card 4242 → account 9001
+	id, _ := s.Ingest(fixture.Mail("debit", fixture.AlertBody))
+	if m, _ := s.Message(id); m.State != "queued" || !strings.Contains(m.Reason, "isn't linked to a bank account") {
+		t.Fatal(m.State, m.Reason)
+	}
+	if err := s.SaveCardLink(CardLink{Issuer: "hdfc ", Card: "4242", Account: "90O1"}); err == nil {
+		t.Fatal("invalid account accepted")
+	}
+	if err := s.SaveCardLink(CardLink{Issuer: "HDFC", Card: "4242", Account: "9001"}); err != nil {
+		t.Fatal(err)
+	}
+	s.Reprocess()
+	rows, _ := s.Transactions(Filter{Account: ledger.AccountKey("HDFC", "bank", "9001")})
+	if len(rows) != 1 || rows[0].AccountKind != "bank" || rows[0].Reference != "Debit card ••4242" {
+		t.Fatalf("%+v", rows)
+	}
+	links, _ := s.CardLinks()
+	if len(links) != 1 || s.DeleteCardLink("HDFC", "4242") != nil || s.DeleteCardLink("HDFC", "4242") == nil {
+		t.Fatal("links", links)
+	}
+	if rows, _ = s.Transactions(Filter{}); len(rows) != 1 {
+		t.Fatal("unlinking changed recorded transactions")
+	}
+}
