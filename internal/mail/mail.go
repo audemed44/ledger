@@ -4,6 +4,8 @@
 package mail
 
 import (
+	"unicode/utf8"
+	"unicode"
 	"bytes"
 	"errors"
 	"io"
@@ -145,6 +147,7 @@ func Decode(raw []byte) Message {
 			m.BodyFormat = "html"
 		}
 	}
+	m.Body = cleanText(m.Body)
 	if m.Reason == "" {
 		if m.HasPDF {
 			m.Reason = StatementReason
@@ -273,4 +276,31 @@ func hidden(n *html.Node) bool {
 		}
 	}
 	return false
+}
+
+// cleanText repairs text for matching. Bytes that aren't UTF-8 (some banks
+// send Latin-1 non-breaking spaces in "UTF-8" mail) are read as Latin-1,
+// non-breaking and other Unicode spaces become plain spaces, because a
+// pattern's \s only matches ASCII whitespace, and line endings become \n,
+// so a pattern's end of line works.
+func cleanText(s string) string {
+	s = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(s)
+	if !utf8.ValidString(s) {
+		var b strings.Builder
+		for i := 0; i < len(s); {
+			r, size := utf8.DecodeRuneInString(s[i:])
+			if r == utf8.RuneError && size == 1 {
+				r = rune(s[i])
+			}
+			b.WriteRune(r)
+			i += size
+		}
+		s = b.String()
+	}
+	return strings.Map(func(r rune) rune {
+		if r != '\n' && r != '\t' && unicode.IsSpace(r) {
+			return ' '
+		}
+		return r
+	}, s)
 }
