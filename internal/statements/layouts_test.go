@@ -104,3 +104,24 @@ func TestICICICreditCard(t *testing.T) {
 		"no summary":    {Layout: strings.Replace(text.Layout, "Previous Balance", "Earlier", 1), Raw: text.Raw},
 	})
 }
+
+func TestIDFCCreditCard(t *testing.T) {
+	text := fixture.IDFCStatement
+	check(t, "idfc-credit-card", layout(text), Statement{
+		Issuer: "IDFC", AccountKind: "card", Account: "4242", Date: "2026-10-24", DueDate: "2026-11-08",
+		Opening: -5000, TotalDue: -2000,
+	}, []string{
+		"2026-10-02 -1500.00 EXAMPLE KITCHEN, PUNE",
+		"2026-10-10 -30.00 LATE FEE REVERSAL ADJ GST",
+		"2026-10-20 +1500.00 BBPS CC Payment/EXAMPLE0000001",
+	})
+	failsClosed(t, "idfc-credit-card", map[string]Text{
+		"missing row":  layout(strings.Replace(text, "10 Oct 26                          LATE FEE REVERSAL ADJ GST                                                                         30.00 DR\n", "", 1)),
+		"broken row":   layout(strings.Replace(text, "1,500.00 DR", "1,500.00", 1)),
+		"second card":  layout(strings.Replace(text, "Payments & Other Credits", "Card Number: XXXX 8080\nPayments & Other Credits", 1)),
+		"in debit":     layout(strings.Replace(text, "r20.00 CR\n      Pay", "r20.00\n      Pay", 1)),
+		"no summary":   layout(strings.Replace(text, "EMI & Other Debits", "Other", 1)),
+		"wrong layout": layout(strings.ReplaceAll(text, "IDFC FIRST", "OTHER")),
+		"bad date":     layout(strings.Replace(text, "02 Oct 26", "32 Oct 26", 1)),
+	})
+}
