@@ -4,14 +4,14 @@
 package mail
 
 import (
-	"unicode/utf8"
-	"unicode"
 	"bytes"
 	"errors"
 	"io"
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	_ "github.com/emersion/go-message/charset" // decode non-UTF-8 bodies
 	"github.com/emersion/go-message/mail"
