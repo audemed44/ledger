@@ -27,3 +27,19 @@ func TestLiteralKeepsTrailingFullStop(t *testing.T) {
 		t.Fatal(re)
 	}
 }
+
+// HDFC's SmartStatement file names carry a random hex code.
+func TestWholeLoosensMixedCodes(t *testing.T) {
+	re := regexp.MustCompile(Whole("5010XXXXXX4542_19d48e58_16Jun2026_TO_15Jul2026_170222843.pdf"))
+	for _, next := range []string{
+		"5010XXXXXX4542_84d4401d_16Aug2026_TO_15Sep2026_170214360.pdf",
+		"5010XXXXXX4542_f45c4bd5_16Jul2026_TO_15Aug2026_170217892.pdf",
+	} {
+		if !re.MatchString(next) {
+			t.Errorf("%s doesn't match %s", re, next)
+		}
+	}
+	if re.MatchString("5010XXXXXX4542_19d48e58_16Jun2026_FROM_15Jul2026_170222843.pdf") {
+		t.Fatal("matched a different shape")
+	}
+}
