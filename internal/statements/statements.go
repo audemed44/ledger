@@ -118,6 +118,11 @@ var Adapters = []Adapter{{
 	Name:        "IDFC FIRST Credit Card Parser v1",
 	Description: "IDFC FIRST Bank credit card summary and DR/CR transaction lines",
 	parse:       parseIDFC,
+}, {
+	ID:          "sbi-savings",
+	Name:        "SBI Savings Account Parser v1",
+	Description: "SBI account statement's transaction overview, with running balances",
+	parse:       parseSBI,
 }}
 
 // adapter finds a layout by ID.
