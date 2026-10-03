@@ -245,9 +245,11 @@ ORDER BY (reference<>'' AND reference=?) DESC, abs(julianday(substr(date,1,10))-
 			day, MatchWindowDays, row.Reference, day).Scan(&alert)
 		switch {
 		case err == nil:
-			// The alert's own merchant name and date are kept.
-			_, err = tx.Exec("UPDATE transactions SET status='confirmed',statement_id=?,row_index=? WHERE id=?",
-				id, index+1, alert)
+			// The alert's own merchant name and date are kept, unless the
+			// name was only its parser's description.
+			_, err = tx.Exec(`UPDATE transactions SET status='confirmed',statement_id=?,row_index=?,
+  merchant=CASE WHEN placeholder=1 THEN ? ELSE merchant END, placeholder=0 WHERE id=?`,
+				id, index+1, row.Merchant, alert)
 			matched++
 		case errors.Is(err, sql.ErrNoRows):
 			_, err = tx.Exec(`INSERT INTO transactions(message_id,source_part,row_index,statement_id,merchant,account,amount,currency,direction,date,reference,status,issuer,account_kind)

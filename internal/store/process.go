@@ -118,9 +118,9 @@ ORDER BY (reference<>'' AND reference=?) DESC, abs(julianday(substr(date,1,10))-
 			return err
 		}
 		state = "parsed"
-		_, err = tx.Exec(`INSERT INTO transactions(message_id,merchant,account,amount,currency,direction,date,reference,status,issuer,account_kind)
-VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-			id, t.Merchant, t.Account, t.Amount, t.Currency, t.Direction, t.Date, t.Reference, t.Status, t.Issuer, t.AccountKind)
+		_, err = tx.Exec(`INSERT INTO transactions(message_id,merchant,account,amount,currency,direction,date,reference,status,issuer,account_kind,placeholder)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+			id, t.Merchant, t.Account, t.Amount, t.Currency, t.Direction, t.Date, t.Reference, t.Status, t.Issuer, t.AccountKind, t.Placeholder)
 		if err != nil {
 			return err
 		}

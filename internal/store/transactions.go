@@ -19,7 +19,7 @@ const PageSize = 100
 // Transactions returns one page of matching transactions, newest first.
 func (s *Store) Transactions(f Filter) ([]ledger.Transaction, error) {
 	query := `SELECT id,message_id,merchant,account,amount,currency,direction,date,reference,status,issuer,account_kind,
-  (statement_id IS NOT NULL AND source_part<0) OR alert_message_id IS NOT NULL
+  (statement_id IS NOT NULL AND source_part<0) OR alert_message_id IS NOT NULL, placeholder
 FROM transactions WHERE 1=1`
 	args := []any{}
 	if f.Search != "" {
@@ -59,7 +59,7 @@ FROM transactions WHERE 1=1`
 	for rows.Next() {
 		var t ledger.Transaction
 		err = rows.Scan(&t.ID, &t.MessageID, &t.Merchant, &t.Account, &t.Amount, &t.Currency,
-			&t.Direction, &t.Date, &t.Reference, &t.Status, &t.Issuer, &t.AccountKind, &t.Matched)
+			&t.Direction, &t.Date, &t.Reference, &t.Status, &t.Issuer, &t.AccountKind, &t.Matched, &t.Placeholder)
 		if err != nil {
 			return nil, err
 		}

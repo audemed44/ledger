@@ -12,6 +12,7 @@ export type Parser = {
   currency: string;
   direction: string;
   enabled: boolean;
+  description?: string;
 };
 export type Transaction = {
   account_id?: string;

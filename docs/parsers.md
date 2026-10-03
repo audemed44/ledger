@@ -43,7 +43,7 @@ parser matches one **exact sender** and a **subject** regex, then runs a
 | Group | | |
 | --- | --- | --- |
 | `amount` | required | `1,234.56`; Indian and western grouping, at most two decimals |
-| `merchant` | required | |
+| `merchant` | required, unless the parser has a description | |
 | `account` | required | Exactly the last four digits |
 | `date` | required | Read with the parser's date layout and time zone |
 | `currency` | optional | Otherwise the parser's default |
@@ -61,6 +61,12 @@ Date layouts are Go's: `02-Jan-2006`, `2006-01-02`, `02/01/2006 15:04`.
   transactions, say) out of the ledger and out of the inbox. An ignore
   parser needs no body pattern: without one, it ignores every email from
   the sender whose subject matches.
+- **Description when the email names no merchant**: some alerts, such as
+  a card payment received, name no merchant. Leave Merchant untagged and
+  give a description ("Payment received"); it stands in until a statement
+  line confirms the transaction, and then the statement's description
+  replaces it. Reconciliation never used the merchant: it matches on
+  account, amount, currency, direction and date.
 - **Debit card** as the account type records a debit card's alerts on the
   bank account it draws on; see [Debit cards](#debit-cards).
 - An email must match **exactly one** parser, once. If two parsers match,

@@ -959,3 +959,29 @@ func TestRereadUnlinksLateAlerts(t *testing.T) {
 		t.Fatal(m.State, linked)
 	}
 }
+
+func TestAlertWithoutMerchantTakesTheStatementsDescription(t *testing.T) {
+	s := testStore(t)
+	p := fixture.AlertParser()
+	p.Issuer, p.AccountKind, p.Direction = "HDFC", "card", "credit"
+	p.Pattern = `(?P<currency>[A-Z]{3}) (?P<amount>[\d,.]+) received on card (?P<account>\d{4}) on (?P<date>\d{4}-\d{2}-\d{2})`
+	if _, err := s.SaveParser(p); err == nil {
+		t.Fatal("parser without merchant or description accepted")
+	}
+	p.Description = "Payment received"
+	s.SaveParser(p)
+	s.Ingest(fixture.Mail("payment", "INR 600.00 received on card 4242 on 2026-10-01"))
+	rows, _ := s.Transactions(Filter{})
+	if len(rows) != 1 || rows[0].Merchant != "Payment received" || !rows[0].Placeholder {
+		t.Fatalf("%+v", rows)
+	}
+	id, _ := s.Ingest(fixture.StatementMail("statement", fixture.Statement))
+	st, _ := statements.ParseHDFC(fixture.Statement)
+	if out, err := s.ImportStatement(id, 0, PDFPreview{Statement: &st}, statements.Fingerprint(st)); err != nil || out.Matched != 1 {
+		t.Fatal(out, err)
+	}
+	rows, _ = s.Transactions(Filter{Status: "confirmed", Search: "PAYMENT"})
+	if len(rows) != 1 || rows[0].Merchant != "CREDIT CARD PAYMENT (Ref# 123456)" || rows[0].Placeholder || !rows[0].Matched {
+		t.Fatalf("%+v", rows)
+	}
+}

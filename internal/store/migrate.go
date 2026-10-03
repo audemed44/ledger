@@ -38,6 +38,7 @@ func (s *Store) migrate() error {
 		s.migrateAccountKinds,
 		s.migrateStatementImports,
 		s.migrateAlertLinks,
+		s.migratePlaceholders,
 		s.mergeDuplicateStatementParsers,
 		s.retireBeforeBackfill,
 		s.recoverArchivedText,
@@ -60,6 +61,12 @@ func (s *Store) migrateAccountKinds() error {
 // matched to a statement line after the statement was imported.
 func (s *Store) migrateAlertLinks() error {
 	return s.addColumn("transactions", "alert_message_id", "INTEGER REFERENCES messages(id)")
+}
+
+// migratePlaceholders adds transactions.placeholder: the merchant is a
+// parser's description, to be replaced by a statement's.
+func (s *Store) migratePlaceholders() error {
+	return s.addColumn("transactions", "placeholder", "INTEGER NOT NULL DEFAULT 0")
 }
 
 // addColumn adds a column unless it exists. table and column are constants.

@@ -27,6 +27,10 @@ type Parser struct {
 	Currency    string `json:"currency"`
 	Direction   string `json:"direction"` // debit, credit or ignore
 	Enabled     bool   `json:"enabled"`
+	// Description stands in for the merchant when the email names none
+	// ("Payment received"); a statement line that confirms the
+	// transaction replaces it.
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 }
 
 // Preview is what a parser makes of one email.
@@ -51,7 +55,7 @@ func (p Parser) Validate() error {
 	if strings.TrimSpace(p.Name) == "" || len(p.Name) > 100 || !strings.Contains(p.Sender, "@") {
 		return errors.New("issuer name and exact sender email are required")
 	}
-	if len(p.Pattern) > 16000 || len(p.Subject) > 2000 {
+	if len(p.Pattern) > 16000 || len(p.Subject) > 2000 || len(p.Description) > 100 {
 		return errors.New("pattern too long")
 	}
 	if _, err := regexp.Compile(p.Subject); err != nil {
@@ -82,6 +86,9 @@ func (p Parser) Validate() error {
 		return errors.New("date layout is required")
 	}
 	for _, name := range required {
+		if name == "merchant" && strings.TrimSpace(p.Description) != "" {
+			continue
+		}
 		if re.SubexpIndex(name) < 0 {
 			return fmt.Errorf("missing named group %s", name)
 		}
@@ -135,7 +142,11 @@ func (p Parser) Parse(sender, subject, body string) (Preview, error) {
 	if err != nil {
 		return Preview{Matched: true}, err
 	}
-	if !ledger.LastFour.MatchString(get("account")) || get("merchant") == "" {
+	merchant, placeholder := get("merchant"), false
+	if merchant == "" && strings.TrimSpace(p.Description) != "" {
+		merchant, placeholder = strings.TrimSpace(p.Description), true
+	}
+	if !ledger.LastFour.MatchString(get("account")) || merchant == "" {
 		return Preview{Matched: true}, errors.New("merchant and exactly four account digits are required")
 	}
 	loc, _ := time.LoadLocation(p.Timezone)
@@ -169,7 +180,8 @@ func (p Parser) Parse(sender, subject, body string) (Preview, error) {
 	return Preview{Matched: true, Transaction: &ledger.Transaction{
 		AccountID:   ledger.AccountKey(issuer, kind, get("account")),
 		AccountKind: kind,
-		Merchant:    get("merchant"),
+		Merchant:    merchant,
+		Placeholder: placeholder,
 		Account:     get("account"),
 		Amount:      amount,
 		Currency:    currency,
