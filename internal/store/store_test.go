@@ -1211,3 +1211,35 @@ func TestStatementLinksAreDownloaded(t *testing.T) {
 		t.Fatal("expired link fetched again", m.Reason)
 	}
 }
+
+func TestDismissAndRestoreEmails(t *testing.T) {
+	s := testStore(t)
+	id, _ := s.Ingest(fixture.Mail("stray", fixture.AlertBody))
+	if err := s.DismissMessage(id); err != nil {
+		t.Fatal(err)
+	}
+	if rows, _ := s.Messages(); len(rows) != 0 {
+		t.Fatal("dismissed email still in the inbox")
+	}
+	if rows, _ := s.FilteredMessages("dismissed"); len(rows) != 1 || rows[0].Reason != DismissedReason {
+		t.Fatal(rows)
+	}
+	// A parser that now matches doesn't touch it until it's restored.
+	s.SaveParser(fixture.AlertParser())
+	s.Reprocess()
+	if rows, _ := s.Transactions(Filter{}); len(rows) != 0 {
+		t.Fatal("dismissed email processed")
+	}
+	if s.DismissMessage(id) == nil {
+		t.Fatal("dismissed twice")
+	}
+	if err := s.RestoreMessage(id); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := s.Message(id); m.State != "parsed" {
+		t.Fatal("restored email not processed", m.State)
+	}
+	if _, err := s.ArchivedRaw(id); err != nil {
+		t.Fatal("archive lost", err)
+	}
+}

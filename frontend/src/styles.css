@@ -1385,3 +1385,8 @@ input[type="date"] {
     grid-template-columns: 1fr;
   }
 }
+.queue-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}

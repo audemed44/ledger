@@ -127,6 +127,28 @@ export function MessageReview({
             ? "Create a rule for this bank’s alert format. Preview it before importing transactions."
             : "Your original email remains safely archived on the server."}
         </p>
+        {(message.state === "queued" || message.state === "dismissed") && (
+          <button
+            class="btn"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              setError("");
+              try {
+                await api(`messages/${message.id}/dismiss`, {
+                  dismissed: message.state === "queued",
+                });
+                imported?.();
+                close();
+              } catch (e) {
+                setError((e as Error).message);
+                setBusy(false);
+              }
+            }}
+          >
+            {message.state === "queued" ? "Dismiss" : "Restore to inbox"}
+          </button>
+        )}
         {message.sender && message.state === "queued" && (
           <button class="btn" disabled={busy} onClick={ignore}>
             <EyeOff size={15} /> Ignore emails like this
