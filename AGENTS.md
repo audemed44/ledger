@@ -23,6 +23,7 @@ email archived intact under `/data/archive`.
   issuer-specific statement layouts.
 - `internal/store`: the database and archive: ingest, processing, parsers,
   statement import (automatic and by hand), reconciliation, migrations.
+- `internal/reminders`: card payment reminders to an Apprise endpoint.
 - `internal/server`: HTTP API, auth, the Foyer widget.
 - `internal/fixture`: synthetic emails, statements and PDFs for tests.
 

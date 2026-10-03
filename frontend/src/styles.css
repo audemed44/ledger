@@ -1390,3 +1390,61 @@ input[type="date"] {
   gap: 8px;
   align-items: center;
 }
+.dues {
+  margin: 18px 0 12px;
+}
+.due {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(200px, 2.5fr) 1fr 1.1fr 130px;
+  gap: 20px;
+  align-items: center;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.due-date {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+}
+.due-date strong {
+  font-weight: 600;
+}
+.due.overdue .due-date strong {
+  color: #e66a60;
+}
+.due.paid {
+  color: var(--fg-2);
+}
+.due.paid .due-date strong {
+  color: #86bb9c;
+}
+.due-action {
+  display: flex;
+  justify-content: flex-end;
+}
+.due-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+}
+.due-progress span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+@media (max-width: 680px) {
+  .due {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+  .due-date {
+    grid-row: 2;
+    padding-left: 47px;
+  }
+  .due-action {
+    grid-row: 2;
+  }
+}

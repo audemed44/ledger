@@ -3,6 +3,7 @@ import { ArrowUpRight, Download, LogOut, Plus } from "lucide-preact";
 import { api } from "./api";
 import { AlertParserEditor } from "./components/AlertParserEditor";
 import { AlertParsers } from "./components/AlertParsers";
+import { CardDues } from "./components/CardDues";
 import { ConnectionPage } from "./components/ConnectionPage";
 import { DebitCards } from "./components/DebitCards";
 import { TransferRules } from "./components/TransferRules";
@@ -227,6 +228,7 @@ export function App() {
                 </p>
               </a>
             </div>
+            <CardDues summary={summary} saved={refresh} />
             <TransactionsPage summary={summary} version={version} />
           </>
         )}
@@ -246,7 +248,9 @@ export function App() {
             <TransferRules version={version} saved={refresh} />
           </>
         )}
-        {page === "connection" && <ConnectionPage sync={sync} busy={busy} syncNow={syncNow} />}
+        {page === "connection" && (
+          <ConnectionPage sync={sync} busy={busy} syncNow={syncNow} reminders={summary.reminders} />
+        )}
       </main>
       <footer>
         <span>
