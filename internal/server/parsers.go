@@ -15,7 +15,7 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/parsers", func(w http.ResponseWriter, r *http.Request) {
 		p, err := s.Store.Parsers()
 		if err != nil {
-			failure(w, 500, "Could not load parsers")
+			serverError(w, r, err, "Could not load parsers")
 			return
 		}
 		jsonResponse(w, p)
@@ -35,18 +35,18 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 		if p.ID != 0 && r.URL.Query().Get("reread") == "1" {
 			var err error
 			if handled, _, err = s.Store.HandledByID(p.ID); err != nil {
-				failure(w, 500, "Could not find the parser's emails")
+				serverError(w, r, err, "Could not find the parser's emails")
 				return
 			}
 		}
 		saved, err := s.Store.SaveParser(p)
 		if err != nil {
-			failure(w, 500, "Could not save parser")
+			serverError(w, r, err, "Could not save parser")
 			return
 		}
 		out := reread{Parser: saved}
 		if out.Reread, out.Kept, err = s.Store.Reread(handled.IDs); err != nil {
-			failure(w, 500, "Parser saved, but re-reading its emails stopped")
+			serverError(w, r, err, "Parser saved, but re-reading its emails stopped")
 			return
 		}
 		jsonResponse(w, out)
@@ -56,7 +56,7 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/parsers/{id}/handled", func(w http.ResponseWriter, r *http.Request) {
 		h, ok, err := s.Store.HandledByID(pathID(r))
 		if err != nil {
-			failure(w, 500, "Could not find the parser's emails")
+			serverError(w, r, err, "Could not find the parser's emails")
 			return
 		}
 		if !ok {
@@ -77,7 +77,7 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 		if r.URL.Query().Get("reread") == "1" {
 			var err error
 			if handled, _, err = s.Store.HandledByID(id); err != nil {
-				failure(w, 500, "Could not find the parser's emails")
+				serverError(w, r, err, "Could not find the parser's emails")
 				return
 			}
 		}
@@ -87,12 +87,12 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 			return
 		}
 		if err != nil {
-			failure(w, 500, "Could not delete parser")
+			serverError(w, r, err, "Could not delete parser")
 			return
 		}
 		out := reread{}
 		if out.Reread, out.Kept, err = s.Store.Reread(handled.IDs); err != nil {
-			failure(w, 500, "Parser deleted, but re-reading its emails stopped")
+			serverError(w, r, err, "Parser deleted, but re-reading its emails stopped")
 			return
 		}
 		jsonResponse(w, out)
@@ -146,7 +146,7 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/card-links", func(w http.ResponseWriter, r *http.Request) {
 		links, err := s.Store.CardLinks()
 		if err != nil {
-			failure(w, 500, "Could not load debit cards")
+			serverError(w, r, err, "Could not load debit cards")
 			return
 		}
 		jsonResponse(w, links)
@@ -161,7 +161,7 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 			return
 		}
 		if _, err := s.Store.Reprocess(); err != nil {
-			failure(w, 500, "Link saved, but retrying the backlog stopped")
+			serverError(w, r, err, "Link saved, but retrying the backlog stopped")
 			return
 		}
 		jsonResponse(w, map[string]bool{"ok": true})
@@ -177,7 +177,7 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 			return
 		}
 		if err != nil {
-			failure(w, 500, "Could not remove debit card")
+			serverError(w, r, err, "Could not remove debit card")
 			return
 		}
 		jsonResponse(w, map[string]bool{"ok": true})
@@ -221,12 +221,12 @@ func (s *Server) parserRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/parsers.yaml", func(w http.ResponseWriter, r *http.Request) {
 		p, err := s.Store.Parsers()
 		if err != nil {
-			failure(w, 500, "Could not export parsers")
+			serverError(w, r, err, "Could not export parsers")
 			return
 		}
 		raw, err := yaml.Marshal(p)
 		if err != nil {
-			failure(w, 500, "Could not export parsers")
+			serverError(w, r, err, "Could not export parsers")
 			return
 		}
 		w.Header().Set("Content-Type", "application/yaml")

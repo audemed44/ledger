@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"net/http"
 	"strings"
+
+	"github.com/audemed44/ledger/internal/logging"
 )
 
 const sessionCookie = "ledger_session"
@@ -39,6 +41,7 @@ func (s *Server) authRoutes(mux *http.ServeMux) {
 			return
 		}
 		if !equal(body.Token, s.Token) {
+			logging.Audit(r.Context(), "session.refused")
 			failure(w, 401, "Invalid access token")
 			return
 		}
@@ -51,6 +54,7 @@ func (s *Server) authRoutes(mux *http.ServeMux) {
 			SameSite: http.SameSiteStrictMode,
 			MaxAge:   86400 * 30,
 		})
+		logging.Audit(r.Context(), "session.signin")
 		jsonResponse(w, map[string]bool{"ok": true})
 	})
 	mux.HandleFunc("POST /api/logout", func(w http.ResponseWriter, r *http.Request) {
@@ -62,6 +66,7 @@ func (s *Server) authRoutes(mux *http.ServeMux) {
 			SameSite: http.SameSiteStrictMode,
 			MaxAge:   -1,
 		})
+		logging.Audit(r.Context(), "session.signout")
 		jsonResponse(w, map[string]bool{"ok": true})
 	})
 }

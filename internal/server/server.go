@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/audemed44/ledger/internal/gmail"
+	"github.com/audemed44/ledger/internal/logging"
 	"github.com/audemed44/ledger/internal/reminders"
 	"github.com/audemed44/ledger/internal/store"
 )
@@ -48,7 +50,7 @@ func (s *Server) Handler() http.Handler {
 	if s.Files != nil {
 		mux.Handle("GET /", http.FileServerFS(s.Files))
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return logging.Requests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Frame-Options", "DENY")
@@ -65,7 +67,7 @@ func (s *Server) Handler() http.Handler {
 			}
 		}
 		mux.ServeHTTP(w, r)
-	})
+	}))
 }
 
 // sameOrigin refuses browser requests from another site. Requests without
@@ -85,6 +87,13 @@ func sameOrigin(r *http.Request) bool {
 func jsonResponse(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// serverError logs what went wrong and answers 500 with msg. err never
+// reaches the browser.
+func serverError(w http.ResponseWriter, r *http.Request, err error, msg string) {
+	slog.ErrorContext(r.Context(), msg, "err", err)
+	failure(w, 500, msg)
 }
 
 func failure(w http.ResponseWriter, status int, msg string) {
