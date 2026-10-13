@@ -19,21 +19,23 @@ func (s *Server) widget(w http.ResponseWriter, r *http.Request) {
 		failure(w, 500, "Could not load widget")
 		return
 	}
-	stats := []map[string]string{}
+	// Amounts are marked private: Foyer blurs them until they're revealed.
+	stats := []map[string]any{}
 	for _, t := range out.Totals {
-		stats = append(stats, map[string]string{
+		stats = append(stats, map[string]any{
 			"label":   "Debits this month",
 			"value":   ledger.Money(t.Debit, t.Currency),
 			"caption": "Excludes transfers between your accounts",
+			"private": true,
 		})
 	}
 	if len(stats) == 0 {
-		stats = append(stats, map[string]string{"label": "Debits this month", "value": "—", "caption": "No alerts yet"})
+		stats = append(stats, map[string]any{"label": "Debits this month", "value": "—", "caption": "No alerts yet"})
 	}
 	if stat := dueStat(out.Dues); stat != nil {
 		stats = append(stats, stat)
 	}
-	stats = append(stats, map[string]string{"label": "Needs review", "value": strconv.Itoa(out.Queued)})
+	stats = append(stats, map[string]any{"label": "Needs review", "value": strconv.Itoa(out.Queued)})
 	items := []map[string]any{}
 	for _, d := range out.Dues {
 		if d.Status == "paid" {
@@ -44,6 +46,7 @@ func (s *Server) widget(w http.ResponseWriter, r *http.Request) {
 			"title":    d.Issuer + " card ••" + d.LastFour,
 			"subtitle": "Due " + due.Format("2 Jan") + " · " + reminders.When(d.Days),
 			"caption":  reminders.Rupees(d.Remaining),
+			"private":  true,
 			"url":      "/#transactions",
 			"action": map[string]string{
 				"label":   "Mark paid",
@@ -74,7 +77,7 @@ func (s *Server) widget(w http.ResponseWriter, r *http.Request) {
 
 // dueStat is the total still owed on cards, toned by the nearest due date;
 // nil when no card statement has been imported.
-func dueStat(dues []store.Due) map[string]string {
+func dueStat(dues []store.Due) map[string]any {
 	if len(dues) == 0 {
 		return nil
 	}
@@ -90,7 +93,7 @@ func dueStat(dues []store.Due) map[string]string {
 		total += d.Remaining
 		open++
 	}
-	stat := map[string]string{"label": "Card dues", "value": reminders.Rupees(total), "caption": "All paid", "tone": "good"}
+	stat := map[string]any{"label": "Card dues", "value": reminders.Rupees(total), "caption": "All paid", "tone": "good", "private": true}
 	if open > 0 {
 		stat["caption"] = "Next " + reminders.When(nearest)
 		stat["tone"] = "accent"

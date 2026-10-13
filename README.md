@@ -143,7 +143,8 @@ Add an **app** widget with URL `http://ledger:8080/api/foyer/widget` and
 month's debits per currency, what's owed on your cards with a **Mark paid**
 button for each, and how many emails need review, and PDFs in
 Foyer's Drop get a **Send to Ledger** button: handy for statements a bank
-only emails as a download link.
+only emails as a download link. The amounts are marked private, so Foyer
+blurs them until you hover the card or tap one.
 
 ## Development
 
