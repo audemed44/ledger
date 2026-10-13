@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"slices"
 	"strconv"
@@ -18,6 +17,7 @@ import (
 	"time"
 
 	"github.com/audemed44/ledger/internal/ledger"
+	"github.com/audemed44/ledger/internal/logging"
 	"github.com/audemed44/ledger/internal/store"
 )
 
@@ -100,9 +100,8 @@ func (n *Notifier) Run(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Minute)
 	defer ticker.Stop()
 	for {
-		if err := n.Check(ctx, time.Now()); err != nil {
-			slog.Warn("payment reminders", "err", err)
-		}
+		rctx, run := logging.QuietJob(ctx, "reminders.check")
+		run.End(n.Check(rctx, time.Now()))
 		select {
 		case <-ctx.Done():
 			return

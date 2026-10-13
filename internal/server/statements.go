@@ -1,12 +1,13 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"io"
-	"log/slog"
 	"net/http"
 
+	"github.com/audemed44/ledger/internal/logging"
 	"github.com/audemed44/ledger/internal/statements"
 	"github.com/audemed44/ledger/internal/store"
 )
@@ -25,7 +26,7 @@ func (s *Server) statementRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/statement-parsers", func(w http.ResponseWriter, r *http.Request) {
 		p, err := s.Store.StatementParsers()
 		if err != nil {
-			failure(w, 500, "Could not load statement parsers")
+			serverError(w, r, err, "Could not load statement parsers")
 			return
 		}
 		jsonResponse(w, p)
@@ -49,7 +50,7 @@ func (s *Server) statementRoutes(mux *http.ServeMux) {
 			return
 		}
 		if err != nil {
-			failure(w, 500, "Could not save statement parser")
+			serverError(w, r, err, "Could not save statement parser")
 			return
 		}
 		jsonResponse(w, saved)
@@ -66,7 +67,7 @@ func (s *Server) statementRoutes(mux *http.ServeMux) {
 			return
 		}
 		if err != nil {
-			failure(w, 500, "Could not delete statement parser")
+			serverError(w, r, err, "Could not delete statement parser")
 			return
 		}
 		jsonResponse(w, map[string]bool{"ok": true})
@@ -127,7 +128,7 @@ func (s *Server) statementRoutes(mux *http.ServeMux) {
 		if body.ParserID != 0 {
 			parsers, err := s.Store.StatementParsers()
 			if err != nil {
-				failure(w, 500, "Could not load statement parsers")
+				serverError(w, r, err, "Could not load statement parsers")
 				return
 			}
 			for _, p := range parsers {
@@ -169,9 +170,9 @@ func (s *Server) statementRoutes(mux *http.ServeMux) {
 					// Statements like it already waiting in the inbox import
 					// now, in the background.
 					go func() {
-						if _, err := s.Store.Reprocess(); err != nil {
-							slog.Warn("retrying the backlog after saving an automatic import", "err", err)
-						}
+						_, run := logging.Job(context.WithoutCancel(r.Context()), "backlog.retry", "reason", "automatic import")
+						_, err := s.Store.Reprocess()
+						run.End(err)
 					}()
 				}
 			}

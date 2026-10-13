@@ -19,6 +19,7 @@ import (
 	_ "time/tzdata" // the runtime image may have no zoneinfo; TZ needs this
 
 	"github.com/audemed44/ledger/internal/gmail"
+	"github.com/audemed44/ledger/internal/logging"
 	"github.com/audemed44/ledger/internal/reminders"
 	"github.com/audemed44/ledger/internal/server"
 	"github.com/audemed44/ledger/internal/smartstatement"
@@ -45,7 +46,7 @@ func main() {
 	}
 	demo := flag.Bool("demo", false, "seed synthetic examples; disables Gmail")
 	flag.Parse()
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	logging.Setup("ledger", os.Stderr)
 
 	token := os.Getenv("LEDGER_TOKEN")
 	if token == "" {
@@ -118,6 +119,7 @@ func main() {
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      11 * time.Minute, // a manual sync can take up to 10
 		IdleTimeout:       60 * time.Second,
+		ErrorLog:          logging.ServerErrorLog(),
 	}
 	go func() {
 		<-ctx.Done()

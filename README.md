@@ -90,6 +90,8 @@ they belong together.
 | `LEDGER_DATA_DIR` | `/data` | |
 | `LEDGER_LISTEN` | `:8080` | |
 | `TZ` | UTC | Where "this month" starts and ends |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
+| `LOG_FORMAT` | `json` | `text` for reading in a terminal |
 
 Secrets stay in the environment: never in SQLite, logs, the API or the
 browser.
@@ -135,6 +137,17 @@ docker exec -e LEDGER_PDF_PASSWORD='…' ledger ledger check-statement --layout 
 `--layout` is one of `hdfc-credit-card` (the default), `axis-credit-card`,
 `icici-credit-card`, `idfc-credit-card`, `sbi-savings` and `hdfc-savings`.
 It exits 0 when the statement validates and 2 when it needs review.
+
+## Logs
+
+Ledger writes one JSON object per line on stderr, for
+[Logbook](https://github.com/audemed44/logbook) to collect: every request
+(failures as errors, changes at info, plain reads at debug), background
+jobs with how long they took, and an audit line for sign-ins. Nothing it
+stores goes into the logs. A message repeated more than 20 times a minute
+is held back and counted, at most 600 lines a minute get out, and long
+values are cut at 4 KB, so a failing Ledger can't flood the disk. Docker's
+own copy is capped in compose (`logging:`, 3 × 10 MB).
 
 ## Foyer
 

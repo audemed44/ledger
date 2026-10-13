@@ -16,7 +16,7 @@ import (
 func (s *Server) widget(w http.ResponseWriter, r *http.Request) {
 	out, err := s.summary()
 	if err != nil {
-		failure(w, 500, "Could not load widget")
+		serverError(w, r, err, "Could not load widget")
 		return
 	}
 	// Amounts are marked private: Foyer blurs them until they're revealed.

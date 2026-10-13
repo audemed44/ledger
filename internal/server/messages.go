@@ -15,7 +15,7 @@ func (s *Server) messageRoutes(mux *http.ServeMux) {
 		}
 		rows, err := s.Store.FilteredMessages(kind)
 		if err != nil {
-			failure(w, 500, "Could not load queue")
+			serverError(w, r, err, "Could not load queue")
 			return
 		}
 		jsonResponse(w, rows)
@@ -27,7 +27,7 @@ func (s *Server) messageRoutes(mux *http.ServeMux) {
 			return
 		}
 		if err != nil {
-			failure(w, 500, "Could not load message")
+			serverError(w, r, err, "Could not load message")
 			return
 		}
 		jsonResponse(w, m)
@@ -46,7 +46,7 @@ func (s *Server) messageRoutes(mux *http.ServeMux) {
 		}
 		n, err := s.Store.Reprocess()
 		if err != nil {
-			failure(w, 500, "Rule saved, but retrying the backlog stopped")
+			serverError(w, r, err, "Rule saved, but retrying the backlog stopped")
 			return
 		}
 		jsonResponse(w, map[string]any{"parser": p, "processed": n})
@@ -71,7 +71,7 @@ func (s *Server) messageRoutes(mux *http.ServeMux) {
 			return
 		}
 		if err != nil {
-			failure(w, 500, "Could not update the email")
+			serverError(w, r, err, "Could not update the email")
 			return
 		}
 		jsonResponse(w, map[string]bool{"ok": true})
@@ -79,7 +79,7 @@ func (s *Server) messageRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/reprocess", func(w http.ResponseWriter, r *http.Request) {
 		n, err := s.Store.Reprocess()
 		if err != nil {
-			failure(w, 500, "Reprocessing stopped; remaining mail stays queued")
+			serverError(w, r, err, "Reprocessing stopped; remaining mail stays queued")
 			return
 		}
 		jsonResponse(w, map[string]int{"processed": n})

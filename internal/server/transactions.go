@@ -18,7 +18,7 @@ func (s *Server) transactionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/summary", func(w http.ResponseWriter, r *http.Request) {
 		out, err := s.summary()
 		if err != nil {
-			failure(w, 500, "Could not load summary")
+			serverError(w, r, err, "Could not load summary")
 			return
 		}
 		jsonResponse(w, out)
@@ -26,7 +26,7 @@ func (s *Server) transactionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/transactions", func(w http.ResponseWriter, r *http.Request) {
 		rows, err := s.Store.Transactions(filter(r))
 		if err != nil {
-			failure(w, 500, "Could not load transactions")
+			serverError(w, r, err, "Could not load transactions")
 			return
 		}
 		jsonResponse(w, rows)
@@ -47,7 +47,7 @@ func (s *Server) transactionRoutes(mux *http.ServeMux) {
 			return
 		}
 		if err != nil {
-			failure(w, 500, "Could not update transaction")
+			serverError(w, r, err, "Could not update transaction")
 			return
 		}
 		jsonResponse(w, map[string]bool{"ok": true})
@@ -67,7 +67,7 @@ func (s *Server) transactionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/transfer-rules", func(w http.ResponseWriter, r *http.Request) {
 		rules, err := s.Store.TransferRules()
 		if err != nil {
-			failure(w, 500, "Could not load transfer rules")
+			serverError(w, r, err, "Could not load transfer rules")
 			return
 		}
 		jsonResponse(w, rules)
@@ -79,7 +79,7 @@ func (s *Server) transactionRoutes(mux *http.ServeMux) {
 			return
 		}
 		if err != nil {
-			failure(w, 500, "Could not delete rule")
+			serverError(w, r, err, "Could not delete rule")
 			return
 		}
 		jsonResponse(w, map[string]bool{"ok": true})
@@ -98,7 +98,7 @@ func (s *Server) transactionRoutes(mux *http.ServeMux) {
 			return
 		}
 		if err != nil {
-			failure(w, 500, "Could not update transaction")
+			serverError(w, r, err, "Could not update transaction")
 			return
 		}
 		jsonResponse(w, map[string]bool{"ok": true})

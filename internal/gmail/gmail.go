@@ -19,6 +19,7 @@ import (
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
 
+	"github.com/audemed44/ledger/internal/logging"
 	"github.com/audemed44/ledger/internal/mail"
 	"github.com/audemed44/ledger/internal/store"
 )
@@ -52,6 +53,8 @@ type Poller struct {
 	Config Config
 	mu     sync.Mutex
 	status Status
+	// fetched counts the messages one pass archived, for its log line.
+	fetched int
 }
 
 // Status returns the current sync status.
@@ -89,7 +92,10 @@ func (p *Poller) Sync(ctx context.Context) {
 	}
 	p.status.Running = true
 	p.mu.Unlock()
+	ctx, run := logging.Job(ctx, "mail.sync", "label", p.Config.Label)
+	p.fetched = 0
 	err := p.sync(ctx)
+	run.End(err, "fetched", p.fetched)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.status.Running = false
@@ -198,6 +204,7 @@ func (p *Poller) syncMailbox(c *client.Client) error {
 			continue // gone since the search; the cursor stays put
 		}
 		cur.UID = uid
+		p.fetched++
 		if err = persist(); err != nil {
 			return errors.New("Could not save sync cursor")
 		}
