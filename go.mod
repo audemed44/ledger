@@ -1,6 +1,6 @@
 module github.com/audemed44/ledger
 
-go 1.26.0
+go 1.27.3
 
 require (
 	github.com/emersion/go-imap v1.2.1
