@@ -20,7 +20,7 @@ binary that idles at about 11 MB of RAM.
   extracted with `pdftotext`, and parsed by an issuer-specific layout. Rows
   must add up to the statement's summary before anything can be imported.
   Import the first one by hand; later ones import themselves. Supported
-  today: HDFC, ICICI, Axis and IDFC FIRST credit cards, and SBI and HDFC
+  today: HDFC, ICICI, Axis, IDFC FIRST and HSBC credit cards, and SBI and HDFC
   Bank accounts (HDFC Bank's emailed SmartStatements and NetBanking
   downloads).
 - **Reconciliation**: a statement line confirms the alert for it, lines
@@ -135,7 +135,7 @@ docker exec -e LEDGER_PDF_PASSWORD='…' ledger ledger check-statement --layout 
 ```
 
 `--layout` is one of `hdfc-credit-card` (the default), `axis-credit-card`,
-`icici-credit-card`, `idfc-credit-card`, `sbi-savings` and `hdfc-savings`.
+`icici-credit-card`, `idfc-credit-card`, `hsbc-credit-card`, `sbi-savings` and `hdfc-savings`.
 It exits 0 when the statement validates and 2 when it needs review.
 
 ## Logs
