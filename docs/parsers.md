@@ -264,6 +264,7 @@ refuses a statement with a second card or account in it.
 | **Axis Credit Card Parser v1** (`axis-credit-card`) | Axis, card | Previous balance, payments, credits, purchases, cash and other charges against the Dr/Cr lines |
 | **ICICI Credit Card Parser v1** (`icici-credit-card`) | ICICI, card | Summary from the page layout; lines from the PDF's raw text, because the layout text loses their amounts |
 | **IDFC FIRST Credit Card Parser v1** (`idfc-credit-card`) | IDFC, card | Opening balance, purchases, EMI and other debits, payments and refunds; balances in credit are supported. ₹ extracts as `r` |
+| **HSBC Credit Card Parser v1** (`hsbc-credit-card`) | HSBC, card | Opening balance, purchases and other charges, payments and other credits, and net outstanding against the lines (credits end in `CR`). Lines carry no year; it comes from the statement period, across a new year too |
 | **SBI Savings Account Parser v1** (`sbi-savings`) | SBI, bank | Opening and closing balance and every line's running balance, for the one account in the transaction overview |
 | **HDFC Bank Account Parser v1** (`hdfc-savings`) | HDFC, bank | Summary counts and totals, and every line's running balance |
 

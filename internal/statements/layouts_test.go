@@ -219,12 +219,47 @@ func dropLine(text, needle string) []string {
 }
 
 // Each layout reads only its own bank's statements.
+func TestHSBCCreditCard(t *testing.T) {
+	text := fixture.HSBCStatement
+	check(t, "hsbc-credit-card", layout(text), Statement{
+		Issuer: "HSBC", AccountKind: "card", Account: "4242", Date: "2027-01-03", DueDate: "2027-01-20",
+		Opening: 50000, TotalDue: 297882, MinimumDue: 120860,
+	}, []string{
+		"2026-12-08 +500.00 PAYMENT RECEIVED - THANK YOU",
+		"2026-12-20 -999.00 ANNUAL FEE CC00000000001",
+		"2026-12-10 -1250.00 EXAMPLE KITCHEN PUNE IN",
+		"2026-12-22 -300.50 EXAMPLE BOOKS BENGALURU IN",
+		"2027-01-02 -249.50 IAP EXAMPLE CAFE Mumbai",
+		"2026-12-20 -179.82 IGST ASSESSMENT @18.00% CC00000000001",
+	})
+	// A credit balance carried in.
+	credit := strings.Replace(text,
+		"                500.00                                          2,978.82                                     500.00                                    2,978.82",
+		"                500.00CR                                        2,978.82                                     500.00                                    1,978.82", 1)
+	if s, err := ParseWith("hsbc-credit-card", layout(credit)); err != nil || !s.Balanced || s.Opening != -50000 || s.TotalDue != 197882 {
+		t.Fatalf("%+v %v", s, err)
+	}
+	failsClosed(t, "hsbc-credit-card", map[string]Text{
+		"missing row":     layout(strings.Replace(text, "22DEC          EXAMPLE BOOKS          BENGALURU     IN                                                                    300.50\n", "", 1)),
+		"broken row":      layout(strings.Replace(text, "1,250.00\n", "1,250.0O\n", 1)),
+		"credit as debit": layout(strings.Replace(text, "500.00CR", "500.00", 1)),
+		"second card":     layout(strings.Replace(text, "40xx xxxx xxxx 4242 EXAMPLE PERSON", "40xx xxxx xxxx 9090 EXAMPLE PERSON", 1)),
+		"no summary":      layout(strings.ReplaceAll(text, "Net Outstanding balance", "Outstanding")),
+		"no period":       layout(strings.ReplaceAll(text, "04 DEC 2026 To 03 JAN 2027", "")),
+		"wrong layout":    layout(strings.ReplaceAll(text, "Hongkong and Shanghai Banking Corporation", "Other Bank")),
+		"bad date":        layout(strings.Replace(text, "10DEC", "32DEC", 1)),
+		"too early":       layout(strings.Replace(text, "10DEC", "10SEP", 1)),
+		"outside table":   layout(strings.Replace(text, "             Credit limit (       )            Cash limit (   )*\n", "05DEC          EXAMPLE SHOP                                                                                    10.00\n", 1)),
+	})
+}
+
 func TestLayoutsRefuseOtherBanks(t *testing.T) {
 	fixtures := map[string]Text{
 		"hdfc-credit-card":  layout(fixture.Statement),
 		"axis-credit-card":  layout(fixture.AxisStatement),
 		"icici-credit-card": {Layout: fixture.ICICIStatement.Layout, Raw: fixture.ICICIStatement.Raw},
 		"idfc-credit-card":  layout(fixture.IDFCStatement),
+		"hsbc-credit-card":  layout(fixture.HSBCStatement),
 		"sbi-savings":       layout(fixture.SBIStatement),
 		"hdfc-savings":      layout(fixture.HDFCBankStatement),
 	}

@@ -260,3 +260,82 @@ Contents of this statement will be considered correct if no error is reported wi
 HDFC BANK LIMITED
 
 `
+
+// HSBCStatement is an HSBC India credit card statement for card 4242 over
+// a period that crosses the new year, on two pages: 500.00 opening, a
+// 500.00 payment, purchases, a fee and its GST (2,978.82), 2,978.82 due.
+// Lines are dated without a year; a balance line closes the table.
+const HSBCStatement = `                                                                                                                                   PAYMENT SUMMARY
+
+                                                                                                                 Payment due date                  Minimal payment due (          )
+                                                                                                                    20 JAN 2027                            1,208.60
+        MR EXAMPLE PERSON
+        XXXXXXXXXXX                                                                                               Statement period                  Total payment due (       )
+        XXXXXXXXXXX                                                                                     04 DEC 2026 To 03 JAN 2027                          2,978.82
+        XXXXXXXXXXX                                                                                                    HSBC LIVE+ CREDIT CARD
+                                                                                                         Please make all cheques/demand drafts duly crossed, payable to "HSBC
+                                                                                                         A/c - your 16 digit credit card number" and write your NAME and CONTACT
+                                                                                                         TELEPHONE NUMBER on the reverse of the instrument.
+                                                                                                                Primary card number                     Account number
+       State: 27 - MAHARASHTRA
+                                                                                                                  40xx xxxx xxxx 4242                 40xx xxxx xxxx 8080
+             Credit limit (       )                         Cash limit (    )*
+                 100,000.00                                    20,000.00
+                                                                                                             (PAYMENT SLIP to be detached and returned with cash payment)
+
+DATE                                          TRANSACTION DETAILS                                                AMOUNTS (           )
+
+               Available Credit Limit                                                                                  97,021.18
+               OPENING BALANCE                                                                                            500.00
+08DEC          PAYMENT RECEIVED - THANK YOU                                                                               500.00CR
+20DEC          ANNUAL FEE       CC00000000001                                                                             999.00
+               PURCHASES & INSTALLMENTS
+               Interest Rate applicable : 3.75% p.m. (45.00% p.a.)
+               40xx xxxx xxxx 4242 EXAMPLE PERSON
+10DEC          EXAMPLE KITCHEN           PUNE        IN                                                                 1,250.00
+
+22DEC          EXAMPLE BOOKS          BENGALURU     IN                                                                    300.50
+
+02JAN          IAP EXAMPLE CAFE Mumbai                                                                                    249.50
+
+
+
+
+                                                                                 ACCOUNT SUMMARY
+
+        Opening balance (     )                   Purchase & other charges (      )                Payment & other credits (   )            Net Outstanding balance (     )
+                500.00                                          2,978.82                                     500.00                                    2,978.82
+
+                                                                                                                                                                  1 of 3
+
+  The Hongkong and Shanghai Banking Corporation Limited.                              Incorporated in Hong Kong SAR with limited liability. Visit us at www.hsbc.co.in
+                                                                                                                          PAYMENT SUMMARY
+
+                                                                                                     Payment due date                   Minimal payment due (           )
+
+
+        MR EXAMPLE PERSON
+                                                                                                      Statement period                    Total payment due (       )
+                                                                                              04 DEC 2026 To 03 JAN 2027
+
+                                                                                                    Primary card number                       Account number
+                                                                                                      40xx xxxx xxxx 4242
+             Credit limit (       )            Cash limit (   )*
+
+DATE                                  TRANSACTION DETAILS                                            AMOUNTS (            )
+
+20DEC          IGST ASSESSMENT @18.00% CC00000000001                                                          179.82
+
+
+               TOTAL PURCHASE OUTSTANDING                                                                  2,978.82
+               TOTAL CASH OUTSTANDING                                                                              0.00
+03JAN          NET OUTSTANDING BALANCE                                                                     2,978.82
+
+                                                                     ACCOUNT SUMMARY
+
+        Opening balance (     )         Purchase & other charges (    )                Payment & other credits (     )            Net Outstanding balance (     )
+                500.00                            2,978.82                                       500.00                                    2,978.82
+
+                                                                                                                                                        2 of 3
+  The Hongkong and Shanghai Banking Corporation Limited.                  Incorporated in Hong Kong SAR with limited liability. Visit us at www.hsbc.co.in
+`

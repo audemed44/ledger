@@ -119,6 +119,11 @@ var Adapters = []Adapter{{
 	Description: "IDFC FIRST Bank credit card summary and DR/CR transaction lines",
 	parse:       parseIDFC,
 }, {
+	ID:          "hsbc-credit-card",
+	Name:        "HSBC Credit Card Parser v1",
+	Description: "HSBC India credit card payment and account summaries and dated transaction lines",
+	parse:       parseHSBC,
+}, {
 	ID:          "sbi-savings",
 	Name:        "SBI Savings Account Parser v1",
 	Description: "SBI account statement's transaction overview, with running balances",

@@ -219,7 +219,7 @@ export function AlertParserEditor({
           <div class="two-col">
             <Field
               label="Issuer / bank"
-              hint="Use the name statements use, so they match: HDFC, ICICI, Axis, IDFC or SBI."
+              hint="Use the name statements use, so they match: HDFC, ICICI, Axis, IDFC, HSBC or SBI."
             >
               <input
                 value={parser.issuer || ""}
