@@ -12,8 +12,12 @@ import (
 )
 
 // Insights describe a month's spending: debits that aren't transfers or
-// dismissed, in the currency most is spent in. Averages are over the six
-// months before, from the first month Ledger has anything for.
+// dismissed, in the currency most is spent in, less refunds. A refund is a
+// credit with a category (a merchant's refund, a reversed fee, money paid
+// back): it lowers its category in the month it arrives, never below zero.
+// Credits without one (salary, say) are income and leave spending alone.
+// Averages are over the six months before, from the first month Ledger has
+// anything for.
 
 // TrendMonths is how many months the trend covers, ending with the month.
 const TrendMonths = 12
@@ -36,6 +40,9 @@ type CategoryInsight struct {
 	Count      int    `json:"count"`
 	Previous   int64  `json:"previous"`
 	Average    int64  `json:"average"`
+	// Refunds is what came back in the category this month, already taken
+	// off Amount.
+	Refunds int64 `json:"refunds"`
 	// Months is the category's spending per trend month, oldest first.
 	Months []int64 `json:"months"`
 }
@@ -53,7 +60,9 @@ type Insights struct {
 	Currency string `json:"currency"`
 	Total    int64  `json:"total"`
 	Count    int    `json:"count"`
-	Previous int64  `json:"previous"`
+	// Refunds is what came back this month, already taken off Total.
+	Refunds  int64 `json:"refunds"`
+	Previous int64 `json:"previous"`
 	// Average is the mean of up to BaselineMonths months before, over
 	// BaselineCount months (0 when there are none).
 	Average       int64 `json:"average"`
@@ -83,6 +92,9 @@ const EverydayLimit = 500000 // ₹5,000
 // spendingWhere picks the debits that count as spending.
 const spendingWhere = "t.direction='debit' AND t.transfer='' AND t.status!='dismissed'"
 
+// refundWhere picks the credits that count against spending.
+const refundWhere = "t.direction='credit' AND t.transfer='' AND t.status!='dismissed' AND t.category_id IS NOT NULL"
+
 // MonthInsights works out the Insights for month (YYYY-MM), as of now.
 func (s *Store) MonthInsights(month string, now time.Time) (Insights, error) {
 	start, err := time.ParseInLocation("2006-01", month, now.Location())
@@ -109,9 +121,12 @@ func (s *Store) MonthInsights(month string, now time.Time) (Insights, error) {
 
 	// Per month and category, over the trend and the baseline before it.
 	from := start.AddDate(0, -(TrendMonths - 1 + BaselineMonths), 0).Format("2006-01")
-	rows, err := s.DB.Query(`SELECT substr(t.date,1,7),coalesce(c.id,0),coalesce(c.name,''),sum(t.amount),count(*)
+	rows, err := s.DB.Query(`SELECT substr(t.date,1,7),coalesce(c.id,0),coalesce(c.name,''),
+  sum(CASE WHEN t.direction='debit' THEN t.amount ELSE 0 END),
+  sum(CASE WHEN t.direction='credit' THEN t.amount ELSE 0 END),
+  sum(t.direction='debit')
 FROM transactions t LEFT JOIN categories c ON c.id=t.category_id
-WHERE `+spendingWhere+` AND t.currency=? AND substr(t.date,1,7) BETWEEN ? AND ?
+WHERE ((`+spendingWhere+`) OR (`+refundWhere+`)) AND t.currency=? AND substr(t.date,1,7) BETWEEN ? AND ?
 GROUP BY 1,2`, out.Currency, from, month)
 	if err != nil {
 		return out, err
@@ -120,18 +135,19 @@ GROUP BY 1,2`, out.Currency, from, month)
 		month    string
 		category int64
 	}
-	amounts, counts, names := map[key]int64{}, map[key]int{}, map[int64]string{}
+	amounts, refunds, counts, names := map[key]int64{}, map[key]int64{}, map[key]int{}, map[int64]string{}
 	monthly := map[string]int64{}
 	for rows.Next() {
 		var m, name string
-		var category, amount int64
+		var category, spent, back int64
 		var count int
-		if err = rows.Scan(&m, &category, &name, &amount, &count); err != nil {
+		if err = rows.Scan(&m, &category, &name, &spent, &back, &count); err != nil {
 			rows.Close()
 			return out, err
 		}
-		amounts[key{m, category}], counts[key{m, category}], names[category] = amount, count, name
-		monthly[m] += amount
+		k := key{m, category}
+		amounts[k], refunds[k], counts[k], names[category] = max(0, spent-back), back, count, name
+		monthly[m] += amounts[k]
 	}
 	rows.Close()
 	if err = rows.Err(); err != nil {
@@ -180,12 +196,16 @@ GROUP BY 1,2`, out.Currency, from, month)
 	for category, name := range names {
 		c := CategoryInsight{CategoryID: category, Category: name,
 			Amount: amounts[key{month, category}], Count: counts[key{month, category}],
-			Previous: amounts[key{previous, category}],
-			Average:  average(func(m string) int64 { return amounts[key{m, category}] })}
+			Previous: amounts[key{previous, category}], Refunds: refunds[key{month, category}],
+			Average: average(func(m string) int64 { return amounts[key{m, category}] })}
 		for _, m := range out.Months {
 			c.Months = append(c.Months, amounts[key{m.Month, category}])
 		}
 		out.Count += c.Count
+		out.Refunds += c.Refunds
+		if c.Amount == 0 && c.Count == 0 && c.Average == 0 && c.Refunds == 0 && !anyMonth(c.Months) {
+			continue
+		}
 		out.Categories = append(out.Categories, c)
 	}
 	sort.Slice(out.Categories, func(i, j int) bool {
@@ -212,11 +232,12 @@ GROUP BY 1,2`, out.Currency, from, month)
 	return out, nil
 }
 
-// dailySpending is month's spending per day.
+// dailySpending is month's spending per day, less that day's refunds.
 func (s *Store) dailySpending(month, currency string, days int) ([]int64, error) {
 	out := make([]int64, days)
-	rows, err := s.DB.Query(`SELECT CAST(substr(t.date,9,2) AS INTEGER),sum(t.amount) FROM transactions t
-WHERE `+spendingWhere+` AND t.currency=? AND substr(t.date,1,7)=? GROUP BY 1`, currency, month)
+	rows, err := s.DB.Query(`SELECT CAST(substr(t.date,9,2) AS INTEGER),
+  sum(CASE WHEN t.direction='debit' THEN t.amount ELSE -t.amount END) FROM transactions t
+WHERE ((`+spendingWhere+`) OR (`+refundWhere+`)) AND t.currency=? AND substr(t.date,1,7)=? GROUP BY 1`, currency, month)
 	if err != nil {
 		return nil, err
 	}
@@ -232,6 +253,15 @@ WHERE `+spendingWhere+` AND t.currency=? AND substr(t.date,1,7)=? GROUP BY 1`, c
 		}
 	}
 	return out, rows.Err()
+}
+
+func anyMonth(months []int64) bool {
+	for _, v := range months {
+		if v != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // largestSpending is month's n largest debits.

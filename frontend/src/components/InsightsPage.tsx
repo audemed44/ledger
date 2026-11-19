@@ -115,6 +115,9 @@ export function InsightsPage({ version, month: thisMonth }: { version: number; m
             {data.current ? " so far" : ""}
           </span>
           <div class="figure-value hero">{money(data.total, c)}</div>
+          {data.refunds > 0 && (
+            <p class="hint">After {money(data.refunds, c)} of refunds and money back</p>
+          )}
           {data.previous > 0 && (
             <Delta
               a={data.total}
@@ -207,8 +210,17 @@ export function InsightsPage({ version, month: thisMonth }: { version: number; m
               <span class="category-track">
                 <span class="category-fill" style={{ width: `${(x.amount / largest) * 100}%` }} />
               </span>
-              <a class="right category-amount" href={link(x)} title="List these transactions">
+              <a
+                class="right category-amount"
+                href={link(x)}
+                title={
+                  x.refunds
+                    ? `${money(x.amount + x.refunds, c)} spent, ${money(x.refunds, c)} back. List these transactions`
+                    : "List these transactions"
+                }
+              >
                 {money(x.amount, c)}
+                {x.refunds > 0 && <span class="refunded">−{whole(x.refunds, c)} back</span>}
               </a>
               <span class="right hint">{x.average ? whole(x.average, c) : "—"}</span>
               <span class="right category-change">{change(x.amount, x.average)}</span>
@@ -219,8 +231,8 @@ export function InsightsPage({ version, month: thisMonth }: { version: number; m
         <p class="hint">No spending in {monthName(data.month)}.</p>
       )}
       <p class="hint">
-        “Usual” is the {usual}. Pick a category to see its months below; its amount lists its
-        transactions.
+        Refunds and money paid back count against their category in the month they arrive. “Usual”
+        is the {usual}. Pick a category to see its months below; its amount lists its transactions.
       </p>
 
       <Section

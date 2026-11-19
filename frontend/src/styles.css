@@ -1770,3 +1770,8 @@ a.category-amount:hover {
     display: none;
   }
 }
+.refunded {
+  display: block;
+  font-size: 10px;
+  color: var(--fg-3);
+}

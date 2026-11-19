@@ -288,7 +288,9 @@ so `INSTAMART` (Groceries) beats `SWIGGY`. A category set by hand always
 stays; choose "Uncategorised (or by rule)" to hand it back to the rules.
 
 The **Insights** tab shows a month's spending (debits that aren't
-transfers): the total against the month before and your 6-month average,
+transfers, less refunds: a credit with a category, such as a merchant's
+refund, a reversed fee or money paid back, lowers that category in the
+month it arrives, never below zero; credits without one are income): the total against the month before and your 6-month average,
 a projection while the month is running (what's spent so far plus your
 everyday rate, spends under ₹5,000, for the days left, so rent isn't
 counted twice), what stands out, each category against its usual, the

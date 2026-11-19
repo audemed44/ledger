@@ -157,6 +157,8 @@ export type CategoryInsight = {
   count: number;
   previous: number;
   average: number;
+  /** What came back in the category this month, already taken off amount. */
+  refunds: number;
   /** Spending per trend month, oldest first. */
   months: number[];
 };
@@ -166,6 +168,8 @@ export type Insights = {
   currency: string;
   total: number;
   count: number;
+  /** What came back this month, already taken off total. */
+  refunds: number;
   previous: number;
   average: number;
   baseline_count: number;
