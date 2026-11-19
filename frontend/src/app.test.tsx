@@ -186,6 +186,7 @@ it("shows a month's insights, and switches the trend to one category", async () 
       currency: "INR",
       total: 1200000,
       count: 3,
+      refunds: 50000,
       previous: 1100000,
       average: 850000,
       baseline_count: 6,
@@ -201,6 +202,7 @@ it("shows a month's insights, and switches the trend to one category", async () 
           count: 2,
           previous: 0,
           average: 300000,
+          refunds: 50000,
           months: months.map((_, i) => (i === 11 ? 900000 : 0)),
         },
         {
@@ -222,7 +224,9 @@ it("shows a month's insights, and switches the trend to one category", async () 
   render(<InsightsPage version={0} month="2026-12" />);
   expect(await screen.findByText("Gacha: ₹9,000, 3× its usual ₹3,000.")).toBeTruthy();
   expect(screen.getByText("+200%")).toBeTruthy();
-  expect(screen.getByRole("link", { name: money(900000, "INR") }).getAttribute("href")).toBe(
+  expect(screen.getByText("After ₹500.00 of refunds and money back")).toBeTruthy();
+  expect(screen.getByText("−₹500 back")).toBeTruthy();
+  expect(screen.getByRole("link", { name: /^₹9,000\.00/ }).getAttribute("href")).toBe(
     "#transactions?category=7&period=month-2026-12",
   );
   fireEvent.click(screen.getByRole("button", { name: "Gacha" }));

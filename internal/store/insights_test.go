@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/audemed44/ledger/internal/alerts"
 	"github.com/audemed44/ledger/internal/fixture"
 )
 
@@ -113,5 +114,57 @@ func TestMonthInsights(t *testing.T) {
 	in, _ = s.MonthInsights("2026-05", december)
 	if in.BaselineCount != 0 || in.Average != 0 || in.Insights[0].Text[:7] != "Largest" {
 		t.Fatalf("%+v", in.Insights)
+	}
+}
+
+func TestInsightsTakeRefundsOffTheirCategory(t *testing.T) {
+	s := testStore(t)
+	out := fixture.AlertParser()
+	out.Issuer, out.AccountKind, out.Direction = "HDFC", "card", "debit"
+	out, _ = s.SaveParser(out)
+	in := fixture.AlertParser()
+	in.Name, in.Issuer, in.AccountKind, in.Direction = "In", "HDFC", "card", "credit"
+	in.Sender = "in@example.invalid"
+	in, _ = s.SaveParser(in)
+	n := 0
+	mail := func(p alerts.Parser, amount, merchant, date string) {
+		n++
+		raw := strings.Replace(string(fixture.Mail(fmt.Sprintf("r%d", n),
+			"INR "+amount+" at "+merchant+" card 4242 on "+date)), "alerts@example.invalid", p.Sender, 1)
+		if _, err := s.Ingest([]byte(raw)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mail(out, "1,000.00", "EXAMPLE FOOD", "2026-11-02")
+	mail(in, "400.00", "EXAMPLE FOOD REFUND", "2026-11-03")
+	mail(out, "3,540.00", "ANNUAL FEE", "2026-11-04")
+	mail(in, "5,000.00", "ANNUAL FEE REVERSAL", "2026-11-05")
+	mail(in, "50,000.00", "SALARY", "2026-11-06")
+	cats, _ := s.Categories()
+	id := map[string]int64{}
+	for _, c := range cats {
+		id[c.Name] = c.ID
+	}
+	s.SaveCategoryRule(CategoryRule{Contains: "EXAMPLE FOOD", CategoryID: id["Food delivery"]})
+	s.SaveCategoryRule(CategoryRule{Contains: "ANNUAL FEE", CategoryID: id["Fees & charges"]})
+
+	got, err := s.MonthInsights("2026-11", time.Date(2026, 12, 1, 0, 0, 0, 0, time.Local))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Food: 1,000 - 400. Fees: 3,540 - 5,000, but never below zero. The
+	// uncategorised salary isn't spending at all.
+	if got.Total != 60000 || got.Refunds != 540000 || got.Count != 2 {
+		t.Fatalf("%+v", got)
+	}
+	amounts := map[string][2]int64{}
+	for _, c := range got.Categories {
+		amounts[c.Category] = [2]int64{c.Amount, c.Refunds}
+	}
+	if amounts["Food delivery"] != [2]int64{60000, 40000} || amounts["Fees & charges"] != [2]int64{0, 500000} {
+		t.Fatal(amounts)
+	}
+	if got.Daily[1] != 100000 || got.Daily[2] != -40000 || got.Daily[5] != 0 {
+		t.Fatal(got.Daily)
 	}
 }
