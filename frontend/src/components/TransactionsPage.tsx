@@ -1,25 +1,14 @@
 import { useEffect, useState } from "preact/hooks";
 import { ArrowDownLeft, ArrowUpRight, Download, MoreHorizontal } from "lucide-preact";
 import { api } from "../api";
-import { dateLabel, money, periodRange, recentMonths } from "../lib";
-import type { Category, CategoryTotal, Summary, Transaction } from "../types";
-import { CategorySpend } from "./CategorySpend";
+import { dateLabel, money, payee, periodRange, recentMonths } from "../lib";
+import type { Category, Summary, Transaction } from "../types";
 import { Empty, ErrorNote, Field, Section } from "./ui";
 
-// ruleText guesses what a rule should look for: the payee's name when the
-// description has one in brackets ("VPA …@okhdfc (A SHOP)"), or the whole
-// description.
-export function ruleText(merchant: string) {
-  const named = /\(([^()]{3,})\)\s*$/.exec(merchant);
-  return (named ? named[1] : merchant).trim();
-}
-
-// monthOf is the YYYY-MM month a date range covers exactly, or "".
-function monthOf(from: string, to: string) {
-  if (!from || from.slice(0, 7) !== to.slice(0, 7) || !from.endsWith("-01")) return "";
-  const [y, m] = from.split("-").map(Number);
-  const last = new Date(y, m, 0).getDate();
-  return to === `${from.slice(0, 7)}-${String(last).padStart(2, "0")}` ? from.slice(0, 7) : "";
+// linked reads filters a link put after the page's "?", such as Insights'
+// #transactions?category=4&period=month-2026-11.
+function linked(name: string) {
+  return new URLSearchParams(location.hash.split("?")[1] ?? "").get(name) ?? "";
 }
 
 export function TransactionsPage({ summary, version }: { summary: Summary; version: number }) {
@@ -30,11 +19,10 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
     [to, setTo] = useState(""),
     [status, setStatus] = useState(""),
     [kind, setKind] = useState(""),
-    [category, setCategory] = useState(""),
+    [category, setCategory] = useState(linked("category")),
     [categories, setCategories] = useState<Category[]>([]),
-    [spend, setSpend] = useState<CategoryTotal[]>(summary.categories ?? []),
     [rule, setRule] = useState({ contains: "", category: 0 }),
-    [period, setPeriod] = useState(""),
+    [period, setPeriod] = useState(linked("period")),
     [actions, setActions] = useState(0),
     [offset, setOffset] = useState(0),
     [error, setError] = useState(""),
@@ -78,25 +66,9 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
       .then(setCategories)
       .catch((e) => setError(e.message));
   }, [version, reload]);
-  // The chart follows the period when it's one month, else this month.
-  const chartMonth = monthOf(range.from, range.to) || summary.month;
-  useEffect(() => {
-    let current = true;
-    api<CategoryTotal[]>("categories/totals?month=" + chartMonth)
-      .then((data) => current && setSpend(data))
-      .catch((e) => current && setError(e.message));
-    return () => {
-      current = false;
-    };
-  }, [chartMonth, version, reload]);
-  const [chartYear, chartMonthIndex] = chartMonth.split("-").map(Number);
-  const chartLabel = new Date(chartYear, chartMonthIndex - 1, 1).toLocaleDateString("en-GB", {
-    month: "long",
-    year: "numeric",
-  });
   function openActions(t: Transaction) {
     setActions(actions === t.id ? 0 : t.id);
-    setRule({ contains: ruleText(t.merchant), category: t.category_id ?? 0 });
+    setRule({ contains: payee(t.merchant), category: t.category_id ?? 0 });
   }
   useEffect(() => {
     let current = true;
@@ -125,17 +97,7 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
   }, [params, version, reload]);
   return (
     <section>
-      <CategorySpend
-        index={summary.dues.length ? "02" : "01"}
-        label={chartLabel}
-        totals={spend}
-        picked={category}
-        pick={(c) => {
-          setCategory(c);
-          if (!monthOf(range.from, range.to)) setPeriod("month-" + chartMonth);
-        }}
-      />
-      <Section index={summary.dues.length ? "03" : "02"} title="Activity">
+      <Section index={summary.dues.length ? "02" : "01"} title="Activity">
         <span class="eyebrow">ALERTS → TRANSACTIONS</span>
       </Section>
       <div class="filters">

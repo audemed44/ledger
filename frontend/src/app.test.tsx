@@ -3,11 +3,11 @@ import { afterEach, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { CardDues } from "./components/CardDues";
 import { ConnectionPage } from "./components/ConnectionPage";
+import { InsightsPage } from "./components/InsightsPage";
 import { TransactionsPage } from "./components/TransactionsPage";
 import { money, periodRange, recentMonths } from "./lib";
 const summary = {
   totals: [],
-  categories: [],
   accounts: [],
   transactions: 0,
   queued: 0,
@@ -173,47 +173,63 @@ it("shows card payments waiting for, or missing, the card's credit", async () =>
   expect(screen.getByText("no card credit")).toBeTruthy();
 });
 
-it("ranks spending by category, and filters the list to one", async () => {
+it("shows a month's insights, and switches the trend to one category", async () => {
   const urls: string[] = [];
+  const months = Array.from({ length: 12 }, (_, i) => ({
+    month: `2026-${String(i + 1).padStart(2, "0")}`,
+    amount: (i + 1) * 100000,
+  }));
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
-    const u = String(url);
-    urls.push(u);
-    if (u.startsWith("/api/categories/totals"))
-      return reply([
-        { category_id: 1, category: "Rent", currency: "INR", amount: 3800000, count: 1 },
-        { category_id: 0, category: "", currency: "INR", amount: 50000, count: 2 },
-      ]);
-    if (u.startsWith("/api/categories")) return reply([{ id: 1, name: "Rent" }]);
-    return reply([
-      {
-        id: 3,
-        message_id: 1,
-        merchant: "VPA example@okhdfc (EXAMPLE LANDLORD)",
-        account: "9001",
-        amount: 3800000,
-        currency: "INR",
-        direction: "debit",
-        date: "2026-10-01",
-        reference: "",
-        status: "confirmed",
-        issuer: "HDFC",
-        category_id: 1,
-        category: "Rent",
-        category_source: "rule",
-      },
-    ]);
+    urls.push(String(url));
+    return reply({
+      month: "2026-12",
+      currency: "INR",
+      total: 1200000,
+      count: 3,
+      previous: 1100000,
+      average: 850000,
+      baseline_count: 6,
+      days: 31,
+      days_in_month: 31,
+      current: false,
+      months,
+      categories: [
+        {
+          category_id: 7,
+          category: "Gacha",
+          amount: 900000,
+          count: 2,
+          previous: 0,
+          average: 300000,
+          months: months.map((_, i) => (i === 11 ? 900000 : 0)),
+        },
+        {
+          category_id: 0,
+          category: "",
+          amount: 300000,
+          count: 1,
+          previous: 0,
+          average: 0,
+          months: [],
+        },
+      ],
+      daily: Array(31).fill(0),
+      previous_daily: Array(30).fill(0),
+      largest: [],
+      insights: [{ text: "Gacha: ₹9,000, 3× its usual ₹3,000.", tone: "up" }],
+    });
   });
-  render(<TransactionsPage summary={summary} version={0} />);
-  const rent = await screen.findByRole("button", { pressed: false, name: /^Rent/ });
-  expect(screen.getByRole("button", { name: /^Uncategorised/ })).toBeTruthy();
-  expect(screen.getByText("99%")).toBeTruthy();
-  fireEvent.click(rent);
-  await waitFor(() =>
-    expect(urls.some((u) => u.includes("category=1") && u.includes("from=2026-10-01"))).toBe(true),
+  render(<InsightsPage version={0} month="2026-12" />);
+  expect(await screen.findByText("Gacha: ₹9,000, 3× its usual ₹3,000.")).toBeTruthy();
+  expect(screen.getByText("+200%")).toBeTruthy();
+  expect(screen.getByRole("link", { name: money(900000, "INR") }).getAttribute("href")).toBe(
+    "#transactions?category=7&period=month-2026-12",
   );
-  // A rule's text starts as the payee's name.
-  fireEvent.click(screen.getByRole("button", { name: /Actions for VPA/ }));
-  expect((screen.getByLabelText("Rule text") as HTMLInputElement).value).toBe("EXAMPLE LANDLORD");
+  fireEvent.click(screen.getByRole("button", { name: "Gacha" }));
+  expect(screen.getByText("Gacha by month")).toBeTruthy();
+  // Picking a month's column loads that month.
+  fireEvent.click(screen.getByRole("button", { name: /^March 2026/ }));
+  await waitFor(() => expect(urls.at(-1)).toBe("/api/insights?month=2026-03"));
 });
 
 it("turns periods into date ranges", () => {

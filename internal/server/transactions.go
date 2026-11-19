@@ -124,11 +124,9 @@ func filter(r *http.Request) store.Filter {
 // the accounts to filter by.
 type Summary struct {
 	store.Counts
-	Totals []store.Total `json:"totals"`
-	// Categories is this month's spending per category.
-	Categories []store.CategoryTotal `json:"categories"`
-	Accounts   []ledger.Account      `json:"accounts"`
-	Dues       []store.Due           `json:"dues"`
+	Totals   []store.Total    `json:"totals"`
+	Accounts []ledger.Account `json:"accounts"`
+	Dues     []store.Due      `json:"dues"`
 	// Reminders is whether payment reminders are sent (LEDGER_NOTIFY_URL is
 	// set), and their settings.
 	Reminders struct {
@@ -149,9 +147,6 @@ func (s *Server) summary() (Summary, error) {
 		return out, err
 	}
 	if out.Totals, err = s.Store.MonthTotals(out.Month); err != nil {
-		return out, err
-	}
-	if out.Categories, err = s.Store.MonthCategories(out.Month); err != nil {
 		return out, err
 	}
 	if out.Accounts, err = s.Store.Accounts(); err != nil {

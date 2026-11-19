@@ -287,10 +287,15 @@ the ledger and every later one. When several fit, the longest text wins,
 so `INSTAMART` (Groceries) beats `SWIGGY`. A category set by hand always
 stays; choose "Uncategorised (or by rule)" to hand it back to the rules.
 
-**Spending by category** on the Transactions page ranks the month's
-debits, transfers left out, per category. It follows the Period filter
-when that's one month, and picking a category lists its transactions.
-The CSV export has a Category column.
+The **Insights** tab shows a month's spending (debits that aren't
+transfers): the total against the month before and your 6-month average,
+a projection while the month is running (what's spent so far plus your
+everyday rate, spends under ₹5,000, for the days left, so rent isn't
+counted twice), what stands out, each category against its usual, the
+last 12 months as columns (pick a category to see just its months, or a
+month to open it), a running total against the month before, and the
+largest spends. A category's amount links to its transactions. The CSV
+export has a Category column.
 
 ## Supported layouts
 

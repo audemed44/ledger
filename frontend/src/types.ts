@@ -48,14 +48,6 @@ export type CategoryRule = {
   category_id: number;
   category: string;
 };
-/** One category's spending in a month; category_id 0 is the uncategorised. */
-export type CategoryTotal = {
-  category_id: number;
-  category: string;
-  currency: string;
-  amount: number;
-  count: number;
-};
 export type Message = {
   id: number;
   sender: string;
@@ -74,7 +66,6 @@ export type Summary = {
   /** Foyer, the homelab's start page (HOMEPAGE_URL). */
   foyer_url?: string;
   totals: { currency: string; debit: number; credit: number }[];
-  categories: CategoryTotal[];
   accounts: { id: string; issuer: string; kind: string; last_four: string }[];
   transactions: number;
   queued: number;
@@ -158,4 +149,34 @@ export type PDFResult = {
     discrepancy: number;
     warnings: string[];
   };
+};
+export type CategoryInsight = {
+  category_id: number;
+  category: string;
+  amount: number;
+  count: number;
+  previous: number;
+  average: number;
+  /** Spending per trend month, oldest first. */
+  months: number[];
+};
+/** A month's spending, from /api/insights. */
+export type Insights = {
+  month: string;
+  currency: string;
+  total: number;
+  count: number;
+  previous: number;
+  average: number;
+  baseline_count: number;
+  days: number;
+  days_in_month: number;
+  projected?: number;
+  current: boolean;
+  months: { month: string; amount: number }[];
+  categories: CategoryInsight[];
+  daily: number[];
+  previous_daily: number[];
+  largest: Transaction[];
+  insights: { text: string; tone: "up" | "down" | "info" }[];
 };

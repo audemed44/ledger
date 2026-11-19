@@ -293,34 +293,3 @@ func (s *Store) findCategories() error {
 	}
 	return nil
 }
-
-// CategoryTotal is one category's spending in a month: debits that aren't
-// transfers or dismissed. Category 0 is the uncategorised.
-type CategoryTotal struct {
-	CategoryID int64  `json:"category_id"`
-	Category   string `json:"category"`
-	Currency   string `json:"currency"`
-	Amount     int64  `json:"amount"`
-	Count      int    `json:"count"`
-}
-
-// MonthCategories is month's (YYYY-MM) spending per category, largest first.
-func (s *Store) MonthCategories(month string) ([]CategoryTotal, error) {
-	rows, err := s.DB.Query(`SELECT coalesce(c.id,0),coalesce(c.name,''),t.currency,sum(t.amount),count(*)
-FROM transactions t LEFT JOIN categories c ON c.id=t.category_id
-WHERE substr(t.date,1,7)=? AND t.status!='dismissed' AND t.transfer='' AND t.direction='debit'
-GROUP BY 1,3 ORDER BY 4 DESC`, month)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []CategoryTotal{}
-	for rows.Next() {
-		var c CategoryTotal
-		if err = rows.Scan(&c.CategoryID, &c.Category, &c.Currency, &c.Amount, &c.Count); err != nil {
-			return nil, err
-		}
-		out = append(out, c)
-	}
-	return out, rows.Err()
-}

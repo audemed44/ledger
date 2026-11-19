@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/audemed44/ledger/internal/alerts"
 	"github.com/audemed44/ledger/internal/fixture"
@@ -102,9 +103,9 @@ func TestCategories(t *testing.T) {
 		t.Fatal("uncategorised left", rows)
 	}
 
-	totals, _ := s.MonthCategories("2026-11")
-	if len(totals) != 3 || totals[0].Category != "Rent" || totals[0].Amount != 5939000 || totals[0].Count != 3 {
-		t.Fatalf("%+v", totals)
+	in, _ := s.MonthInsights("2026-11", time.Date(2026, 11, 20, 0, 0, 0, 0, time.Local))
+	if len(in.Categories) != 3 || in.Categories[0].Category != "Rent" || in.Categories[0].Amount != 5939000 || in.Categories[0].Count != 3 {
+		t.Fatalf("%+v", in.Categories)
 	}
 
 	// Removing a rule, or a category, hands its lines back.

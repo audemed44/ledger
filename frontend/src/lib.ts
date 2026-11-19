@@ -93,3 +93,11 @@ export function recentMonths(n: number, today = new Date()) {
     };
   });
 }
+
+// payee is who a description names: the payee in brackets when it has one
+// ("VPA …@okhdfc (A SHOP)"), else the whole description. It names largest
+// spends and starts a category rule's text.
+export function payee(merchant: string) {
+  const named = /\(([^()]{3,})\)\s*$/.exec(merchant);
+  return (named ? named[1] : merchant).trim();
+}
