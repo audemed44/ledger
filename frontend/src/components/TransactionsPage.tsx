@@ -222,10 +222,20 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
                         ? "Paired with the other side, on another of your accounts"
                         : t.transfer === "rule"
                           ? "A transfer rule matched its description"
-                          : "Marked as a transfer"
+                          : t.transfer === "pending"
+                            ? "A card bill payment: out of the totals while it waits for the card's credit"
+                            : "Marked as a transfer"
                     }
                   >
-                    transfer
+                    {t.transfer === "pending" ? "card payment" : "transfer"}
+                  </span>
+                )}
+                {t.card_payment && (
+                  <span
+                    class="chip flagged no-credit"
+                    title="A card bill payment with no card credit found, so it counts as spending. Mark it as a transfer if it paid your own card."
+                  >
+                    no card credit
                   </span>
                 )}
                 <button

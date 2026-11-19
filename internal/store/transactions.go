@@ -22,7 +22,7 @@ const PageSize = 100
 func (s *Store) Transactions(f Filter) ([]ledger.Transaction, error) {
 	query := `SELECT id,message_id,merchant,account,amount,currency,direction,date,reference,status,issuer,account_kind,
   (statement_id IS NOT NULL AND source_part<0) OR alert_message_id IS NOT NULL, placeholder,
-  transfer, coalesce(transfer_of,0)
+  transfer, coalesce(transfer_of,0), no_transfer
 FROM transactions WHERE 1=1`
 	args := []any{}
 	if f.Search != "" {
@@ -59,6 +59,11 @@ FROM transactions WHERE 1=1`
 	}
 	query += " ORDER BY date DESC,id DESC LIMIT ? OFFSET ?"
 	args = append(args, PageSize, max(f.Offset, 0))
+	// Read before the page: one connection, so not while its rows are open.
+	cards, err := s.yourCards()
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.DB.Query(query, args...)
 	if err != nil {
 		return nil, err
@@ -67,13 +72,15 @@ FROM transactions WHERE 1=1`
 	out := []ledger.Transaction{}
 	for rows.Next() {
 		var t ledger.Transaction
+		var notTransfer bool
 		err = rows.Scan(&t.ID, &t.MessageID, &t.Merchant, &t.Account, &t.Amount, &t.Currency,
 			&t.Direction, &t.Date, &t.Reference, &t.Status, &t.Issuer, &t.AccountKind, &t.Matched, &t.Placeholder,
-			&t.Transfer, &t.TransferOf)
+			&t.Transfer, &t.TransferOf, &notTransfer)
 		if err != nil {
 			return nil, err
 		}
 		t.AccountID = ledger.AccountKey(t.Issuer, t.AccountKind, t.Account)
+		t.CardPayment = t.Transfer == "" && !notTransfer && t.Direction == "debit" && t.AccountKind != "card" && cards.cardPayment(t.Merchant)
 		out = append(out, t)
 	}
 	return out, rows.Err()

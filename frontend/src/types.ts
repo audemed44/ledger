@@ -33,8 +33,9 @@ export type Transaction = {
   issuer: string;
   matched?: boolean;
   placeholder?: boolean;
-  transfer?: "" | "paired" | "rule" | "manual";
+  transfer?: "" | "paired" | "rule" | "manual" | "pending";
   transfer_of?: number;
+  card_payment?: boolean;
 };
 export type Message = {
   id: number;

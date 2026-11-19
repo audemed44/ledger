@@ -241,7 +241,27 @@ leave the monthly totals and the Foyer widget. Pairing is conservative: if
 either side has more than one candidate it pairs neither, and a later
 transaction that makes a pair ambiguous undoes it.
 
-For money moving to an account Ledger doesn't see, such as SBI's
+A card bill's other side only reaches Ledger with the card's next
+statement, weeks after the payment left the bank. So a bank debit that is
+plainly a bill payment to one of your cards is a **card payment** from the
+start: out of the totals, and paired as usual when the card's credit
+arrives. It has to name one of your cards or its issuer, or come through a
+channel that only pays card bills:
+
+- HDFC NetBanking bill pay with your card's number
+  (`IB BILLPAY DR-…-400000XXXXXX4242`), not a debit card's withdrawal or
+  purchase, which carry a masked number too.
+- BillDesk or another bank's NetBanking naming the issuer of a card you
+  have (`…/BILLDKHSBCCREDITCARD`, `INB ICICI Bank Credit card …`).
+- Google Pay's card bill payments (`gpay-creditcard@okpayaxis`, Google
+  India Digital Services), not Google Pay to a merchant.
+
+If no credit has arrived after 45 days it counts as spending again, marked
+**no card credit**: the statement never reached the label, or the card
+isn't yours. **Mark as a transfer** settles one that paid your own card;
+**Not a transfer** keeps a payment in spending for good.
+
+ such as SBI's
 auto-sweep into term deposits ("SWEEP TFR DR", "SWEEP TRF CREDT"), open a
 transaction's actions (**⋯**) and choose **Treat everything like this as
 transfers**. That saves a rule for the issuer and descriptions like this
