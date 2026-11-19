@@ -7,6 +7,7 @@ import { TransactionsPage } from "./components/TransactionsPage";
 import { money, periodRange, recentMonths } from "./lib";
 const summary = {
   totals: [],
+  categories: [],
   accounts: [],
   transactions: 0,
   queued: 0,
@@ -170,6 +171,49 @@ it("shows card payments waiting for, or missing, the card's credit", async () =>
   render(<TransactionsPage summary={summary} version={0} />);
   expect(await screen.findByText("card payment")).toBeTruthy();
   expect(screen.getByText("no card credit")).toBeTruthy();
+});
+
+it("ranks spending by category, and filters the list to one", async () => {
+  const urls: string[] = [];
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    const u = String(url);
+    urls.push(u);
+    if (u.startsWith("/api/categories/totals"))
+      return reply([
+        { category_id: 1, category: "Rent", currency: "INR", amount: 3800000, count: 1 },
+        { category_id: 0, category: "", currency: "INR", amount: 50000, count: 2 },
+      ]);
+    if (u.startsWith("/api/categories")) return reply([{ id: 1, name: "Rent" }]);
+    return reply([
+      {
+        id: 3,
+        message_id: 1,
+        merchant: "VPA example@okhdfc (EXAMPLE LANDLORD)",
+        account: "9001",
+        amount: 3800000,
+        currency: "INR",
+        direction: "debit",
+        date: "2026-10-01",
+        reference: "",
+        status: "confirmed",
+        issuer: "HDFC",
+        category_id: 1,
+        category: "Rent",
+        category_source: "rule",
+      },
+    ]);
+  });
+  render(<TransactionsPage summary={summary} version={0} />);
+  const rent = await screen.findByRole("button", { pressed: false, name: /^Rent/ });
+  expect(screen.getByRole("button", { name: /^Uncategorised/ })).toBeTruthy();
+  expect(screen.getByText("99%")).toBeTruthy();
+  fireEvent.click(rent);
+  await waitFor(() =>
+    expect(urls.some((u) => u.includes("category=1") && u.includes("from=2026-10-01"))).toBe(true),
+  );
+  // A rule's text starts as the payee's name.
+  fireEvent.click(screen.getByRole("button", { name: /Actions for VPA/ }));
+  expect((screen.getByLabelText("Rule text") as HTMLInputElement).value).toBe("EXAMPLE LANDLORD");
 });
 
 it("turns periods into date ranges", () => {

@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"strconv"
 
 	"github.com/audemed44/ledger/internal/ledger"
 )
@@ -11,8 +12,11 @@ import (
 type Filter struct {
 	Search, Account, Status, From, To string
 	// Kind is "transfers", "spending" (everything else) or "" for both.
-	Kind   string
-	Offset int
+	Kind string
+	// Category is a category id, "none" for the uncategorised, or "" for
+	// any.
+	Category string
+	Offset   int
 }
 
 // PageSize is how many transactions one page holds.
@@ -22,7 +26,8 @@ const PageSize = 100
 func (s *Store) Transactions(f Filter) ([]ledger.Transaction, error) {
 	query := `SELECT id,message_id,merchant,account,amount,currency,direction,date,reference,status,issuer,account_kind,
   (statement_id IS NOT NULL AND source_part<0) OR alert_message_id IS NOT NULL, placeholder,
-  transfer, coalesce(transfer_of,0), no_transfer
+  transfer, coalesce(transfer_of,0), no_transfer,
+  coalesce(category_id,0), coalesce((SELECT name FROM categories WHERE id=category_id),''), category_source
 FROM transactions WHERE 1=1`
 	args := []any{}
 	if f.Search != "" {
@@ -44,6 +49,15 @@ FROM transactions WHERE 1=1`
 		query += " AND transfer!=''"
 	case "spending":
 		query += " AND transfer=''"
+	}
+	switch f.Category {
+	case "":
+	case "none":
+		query += " AND category_id IS NULL"
+	default:
+		id, _ := strconv.ParseInt(f.Category, 10, 64)
+		query += " AND category_id=?"
+		args = append(args, id)
 	}
 	if f.Status != "" {
 		query += " AND status=?"
@@ -75,7 +89,7 @@ FROM transactions WHERE 1=1`
 		var notTransfer bool
 		err = rows.Scan(&t.ID, &t.MessageID, &t.Merchant, &t.Account, &t.Amount, &t.Currency,
 			&t.Direction, &t.Date, &t.Reference, &t.Status, &t.Issuer, &t.AccountKind, &t.Matched, &t.Placeholder,
-			&t.Transfer, &t.TransferOf, &notTransfer)
+			&t.Transfer, &t.TransferOf, &notTransfer, &t.CategoryID, &t.Category, &t.CategorySource)
 		if err != nil {
 			return nil, err
 		}

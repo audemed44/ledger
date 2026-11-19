@@ -273,6 +273,25 @@ counts its transactions again.
 transfer" unpairs both sides, and they're never paired or matched by a
 rule again.
 
+## Categories
+
+Categories say what money went on. Ledger starts with a list (Rent,
+Groceries, Food delivery, Games, Bills & utilities and so on); add, rename
+or remove them under **Parsers → Categories**.
+
+Open a transaction's actions (**⋯**) to put it in a category by hand, or
+to save a rule: "when the description contains `SWIGGY`, put it in Food
+delivery". The text starts as the payee's name when the description has
+one in brackets, and any case matches. Rules reach transactions already in
+the ledger and every later one. When several fit, the longest text wins,
+so `INSTAMART` (Groceries) beats `SWIGGY`. A category set by hand always
+stays; choose "Uncategorised (or by rule)" to hand it back to the rules.
+
+**Spending by category** on the Transactions page ranks the month's
+debits, transfers left out, per category. It follows the Period filter
+when that's one month, and picking a category lists its transactions.
+The CSV export has a Category column.
+
 ## Supported layouts
 
 Each layout checks the statement's lines against its own totals, and

@@ -36,6 +36,25 @@ export type Transaction = {
   transfer?: "" | "paired" | "rule" | "manual" | "pending";
   transfer_of?: number;
   card_payment?: boolean;
+  category_id?: number;
+  category?: string;
+  category_source?: "" | "rule" | "manual";
+};
+export type Category = { id: number; name: string };
+export type CategoryRule = {
+  id: number;
+  issuer: string;
+  contains: string;
+  category_id: number;
+  category: string;
+};
+/** One category's spending in a month; category_id 0 is the uncategorised. */
+export type CategoryTotal = {
+  category_id: number;
+  category: string;
+  currency: string;
+  amount: number;
+  count: number;
 };
 export type Message = {
   id: number;
@@ -55,6 +74,7 @@ export type Summary = {
   /** Foyer, the homelab's start page (HOMEPAGE_URL). */
   foyer_url?: string;
   totals: { currency: string; debit: number; credit: number }[];
+  categories: CategoryTotal[];
   accounts: { id: string; issuer: string; kind: string; last_four: string }[];
   transactions: number;
   queued: number;

@@ -1472,3 +1472,108 @@ input[type="date"] {
     grid-row: 2;
   }
 }
+
+/* Spending by category: one ranked bar per category, values as text. */
+.category-spend {
+  margin-bottom: 48px;
+}
+.category-bars {
+  display: grid;
+  gap: 2px;
+  margin: 18px 0 10px;
+}
+.category-bar {
+  display: grid;
+  grid-template-columns: minmax(120px, 190px) 1fr 120px 40px;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.category-bar:hover .category-name,
+.category-bar.picked .category-name {
+  color: var(--accent-hi);
+}
+.category-bar.picked {
+  border-bottom-color: var(--accent);
+}
+.category-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.category-track {
+  height: 10px;
+  background: var(--line-soft);
+}
+.category-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.uncategorised .category-fill {
+  background: var(--fg-3);
+}
+.uncategorised .category-name {
+  color: var(--fg-2);
+  font-style: italic;
+}
+.category-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.category-share {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.category-label.none {
+  color: var(--fg-3);
+  font-style: italic;
+}
+.category-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  width: 100%;
+  padding-bottom: 6px;
+}
+.category-rule,
+.category-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+.category-rule .field input {
+  min-width: 220px;
+}
+.category-add {
+  margin: 12px 0 6px;
+}
+.rules-head {
+  display: block;
+  margin: 26px 0 4px;
+}
+@media (max-width: 680px) {
+  .category-bar {
+    grid-template-columns: 1fr auto 36px;
+    row-gap: 6px;
+  }
+  .category-track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .category-rule .field input {
+    min-width: 0;
+    width: 100%;
+  }
+}

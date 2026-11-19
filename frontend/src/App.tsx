@@ -4,6 +4,7 @@ import { api } from "./api";
 import { AlertParserEditor } from "./components/AlertParserEditor";
 import { AlertParsers } from "./components/AlertParsers";
 import { CardDues } from "./components/CardDues";
+import { Categories } from "./components/Categories";
 import { ConnectionPage } from "./components/ConnectionPage";
 import { DebitCards } from "./components/DebitCards";
 import { TransferRules } from "./components/TransferRules";
@@ -249,6 +250,7 @@ export function App() {
             <StatementParsers />
             <DebitCards saved={refresh} />
             <TransferRules version={version} saved={refresh} />
+            <Categories version={version} saved={refresh} />
           </>
         )}
         {page === "connection" && (

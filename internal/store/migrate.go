@@ -52,6 +52,7 @@ func (s *Store) migrate() error {
 		s.retireBeforeBackfill,
 		s.recoverArchivedText,
 		s.recoverSenders,
+		s.migrateCategories,
 	} {
 		if err := step(); err != nil {
 			return err

@@ -2,8 +2,25 @@ import { useEffect, useState } from "preact/hooks";
 import { ArrowDownLeft, ArrowUpRight, Download, MoreHorizontal } from "lucide-preact";
 import { api } from "../api";
 import { dateLabel, money, periodRange, recentMonths } from "../lib";
-import type { Summary, Transaction } from "../types";
+import type { Category, CategoryTotal, Summary, Transaction } from "../types";
+import { CategorySpend } from "./CategorySpend";
 import { Empty, ErrorNote, Field, Section } from "./ui";
+
+// ruleText guesses what a rule should look for: the payee's name when the
+// description has one in brackets ("VPA …@okhdfc (A SHOP)"), or the whole
+// description.
+export function ruleText(merchant: string) {
+  const named = /\(([^()]{3,})\)\s*$/.exec(merchant);
+  return (named ? named[1] : merchant).trim();
+}
+
+// monthOf is the YYYY-MM month a date range covers exactly, or "".
+function monthOf(from: string, to: string) {
+  if (!from || from.slice(0, 7) !== to.slice(0, 7) || !from.endsWith("-01")) return "";
+  const [y, m] = from.split("-").map(Number);
+  const last = new Date(y, m, 0).getDate();
+  return to === `${from.slice(0, 7)}-${String(last).padStart(2, "0")}` ? from.slice(0, 7) : "";
+}
 
 export function TransactionsPage({ summary, version }: { summary: Summary; version: number }) {
   const [rows, setRows] = useState<Transaction[]>([]),
@@ -13,6 +30,10 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
     [to, setTo] = useState(""),
     [status, setStatus] = useState(""),
     [kind, setKind] = useState(""),
+    [category, setCategory] = useState(""),
+    [categories, setCategories] = useState<Category[]>([]),
+    [spend, setSpend] = useState<CategoryTotal[]>(summary.categories ?? []),
+    [rule, setRule] = useState({ contains: "", category: 0 }),
     [period, setPeriod] = useState(""),
     [actions, setActions] = useState(0),
     [offset, setOffset] = useState(0),
@@ -46,11 +67,37 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
     to: range.to,
     status,
     kind,
+    category,
     offset: String(offset),
   }).toString();
   useEffect(() => {
     setOffset(0);
-  }, [search, account, from, to, status, kind, period]);
+  }, [search, account, from, to, status, kind, category, period]);
+  useEffect(() => {
+    api<Category[]>("categories")
+      .then(setCategories)
+      .catch((e) => setError(e.message));
+  }, [version, reload]);
+  // The chart follows the period when it's one month, else this month.
+  const chartMonth = monthOf(range.from, range.to) || summary.month;
+  useEffect(() => {
+    let current = true;
+    api<CategoryTotal[]>("categories/totals?month=" + chartMonth)
+      .then((data) => current && setSpend(data))
+      .catch((e) => current && setError(e.message));
+    return () => {
+      current = false;
+    };
+  }, [chartMonth, version, reload]);
+  const [chartYear, chartMonthIndex] = chartMonth.split("-").map(Number);
+  const chartLabel = new Date(chartYear, chartMonthIndex - 1, 1).toLocaleDateString("en-GB", {
+    month: "long",
+    year: "numeric",
+  });
+  function openActions(t: Transaction) {
+    setActions(actions === t.id ? 0 : t.id);
+    setRule({ contains: ruleText(t.merchant), category: t.category_id ?? 0 });
+  }
   useEffect(() => {
     let current = true;
     setLoading(true);
@@ -78,7 +125,17 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
   }, [params, version, reload]);
   return (
     <section>
-      <Section index={summary.dues.length ? "02" : "01"} title="Activity">
+      <CategorySpend
+        index={summary.dues.length ? "02" : "01"}
+        label={chartLabel}
+        totals={spend}
+        picked={category}
+        pick={(c) => {
+          setCategory(c);
+          if (!monthOf(range.from, range.to)) setPeriod("month-" + chartMonth);
+        }}
+      />
+      <Section index={summary.dues.length ? "03" : "02"} title="Activity">
         <span class="eyebrow">ALERTS → TRANSACTIONS</span>
       </Section>
       <div class="filters">
@@ -128,6 +185,17 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
             <option value="confirmed">Confirmed</option>
             <option value="flagged">Flagged</option>
             <option value="dismissed">Dismissed</option>
+          </select>
+        </Field>
+        <Field label="Category">
+          <select value={category} onChange={(e) => setCategory(e.currentTarget.value)}>
+            <option value="">All categories</option>
+            <option value="none">Uncategorised</option>
+            {categories.map((c) => (
+              <option key={c.id} value={String(c.id)}>
+                {c.name}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label="Type">
@@ -194,6 +262,23 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
                         ? "Card"
                         : "Account"}{" "}
                     <span class="mono">•• {t.account}</span>
+                    {!t.transfer && (
+                      <>
+                        {" · "}
+                        <span
+                          class={"category-label" + (t.category ? "" : " none")}
+                          title={
+                            t.category_source === "manual"
+                              ? "Set by hand"
+                              : t.category_source === "rule"
+                                ? "Set by a category rule"
+                                : undefined
+                          }
+                        >
+                          {t.category || "Uncategorised"}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -242,7 +327,7 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
                   class="icon-btn row-more"
                   aria-label={`Actions for ${t.merchant}`}
                   aria-expanded={actions === t.id}
-                  onClick={() => setActions(actions === t.id ? 0 : t.id)}
+                  onClick={() => openActions(t)}
                 >
                   <MoreHorizontal size={15} />
                 </button>
@@ -266,6 +351,72 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
               </div>
               {actions === t.id && (
                 <div class="row-actions">
+                  <div class="category-actions">
+                    <Field label="Category">
+                      <select
+                        aria-label={`Category for ${t.merchant}`}
+                        value={String(t.category_source === "manual" ? (t.category_id ?? 0) : 0)}
+                        onChange={(e) =>
+                          act(`transactions/${t.id}/category`, {
+                            category_id: Number(e.currentTarget.value),
+                          })
+                        }
+                      >
+                        <option value="0">
+                          {t.category_source === "rule"
+                            ? `${t.category} (by rule)`
+                            : "Uncategorised (or by rule)"}
+                        </option>
+                        {categories.map((c) => (
+                          <option key={c.id} value={String(c.id)}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <form
+                      class="category-rule"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        act("category-rules", {
+                          issuer: "",
+                          contains: rule.contains,
+                          category_id: rule.category,
+                        });
+                      }}
+                    >
+                      <Field label="Always, when the description contains">
+                        <input
+                          aria-label="Rule text"
+                          value={rule.contains}
+                          onInput={(e) => setRule({ ...rule, contains: e.currentTarget.value })}
+                        />
+                      </Field>
+                      <Field label="Put it in">
+                        <select
+                          aria-label="Rule category"
+                          value={String(rule.category)}
+                          onChange={(e) =>
+                            setRule({ ...rule, category: Number(e.currentTarget.value) })
+                          }
+                        >
+                          <option value="0">Choose…</option>
+                          {categories.map((c) => (
+                            <option key={c.id} value={String(c.id)}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <button
+                        class="btn"
+                        type="submit"
+                        disabled={!rule.category || rule.contains.trim().length < 3}
+                      >
+                        Save rule
+                      </button>
+                    </form>
+                  </div>
                   {t.transfer ? (
                     <button
                       class="btn"
@@ -297,12 +448,12 @@ export function TransactionsPage({ summary, version }: { summary: Summary; versi
       ) : (
         <Empty
           title={
-            search || account || range.from || range.to || status || kind
+            search || account || range.from || range.to || status || kind || category
               ? "No matching transactions"
               : "Your first alert starts the story."
           }
         >
-          {search || account || range.from || range.to || status || kind
+          {search || account || range.from || range.to || status || kind || category
             ? "Try widening your filters."
             : "Connect Gmail, then create a parser for your bank’s alerts. Transactions will appear here automatically."}
         </Empty>
