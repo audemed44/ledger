@@ -9,6 +9,7 @@ import { ConnectionPage } from "./components/ConnectionPage";
 import { DebitCards } from "./components/DebitCards";
 import { TransferRules } from "./components/TransferRules";
 import { InboxPage } from "./components/InboxPage";
+import { InsightsPage } from "./components/InsightsPage";
 import { Login } from "./components/Login";
 import { MessageReview } from "./components/MessageReview";
 import { StatementParsers } from "./components/StatementParsers";
@@ -17,26 +18,29 @@ import { ErrorNote } from "./components/ui";
 import { blankParser, money } from "./lib";
 import type { Message, Parser, Summary, Sync } from "./types";
 
-type Page = "transactions" | "inbox" | "parsers" | "connection";
+type Page = "transactions" | "insights" | "inbox" | "parsers" | "connection";
 
-// Pages live in the URL hash so a reload stays where you were.
-const pages: Page[] = ["transactions", "inbox", "parsers", "connection"];
+// Pages live in the URL hash so a reload stays where you were; a page may
+// carry filters after "?" (#transactions?category=4).
+const pages: Page[] = ["transactions", "insights", "inbox", "parsers", "connection"];
 const labels = {
   transactions: "Transactions",
+  insights: "Insights",
   inbox: "Inbox",
   parsers: "Parsers",
   connection: "Connection",
 };
 
+function hashPage(): Page {
+  const name = location.hash.slice(1).split("?")[0] as Page;
+  return pages.includes(name) ? name : "transactions";
+}
+
 export function App() {
   const [signed, setSigned] = useState<boolean | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
-  const [page, setPage] = useState<Page>(
-    pages.includes(location.hash.slice(1) as Page)
-      ? (location.hash.slice(1) as Page)
-      : "transactions",
-  );
+  const [page, setPage] = useState<Page>(hashPage);
   const [reviewing, setReviewing] = useState<Message | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null),
     [sync, setSync] = useState<Sync | null>(null),
@@ -51,12 +55,7 @@ export function App() {
   useEffect(() => {
     const handler = () => setSigned(false);
     window.addEventListener("ledger-unauthorized", handler);
-    const hash = () =>
-      setPage(
-        pages.includes(location.hash.slice(1) as Page)
-          ? (location.hash.slice(1) as Page)
-          : "transactions",
-      );
+    const hash = () => setPage(hashPage());
     window.addEventListener("hashchange", hash);
     return () => {
       window.removeEventListener("ledger-unauthorized", handler);
@@ -173,11 +172,13 @@ export function App() {
             <h1>
               {page === "transactions"
                 ? "The ledger."
-                : page === "inbox"
-                  ? "Nothing lost."
-                  : page === "parsers"
-                    ? "Read between\nthe lines."
-                    : "Mail to money."}
+                : page === "insights"
+                  ? "Where it\nwent."
+                  : page === "inbox"
+                    ? "Nothing lost."
+                    : page === "parsers"
+                      ? "Read between\nthe lines."
+                      : "Mail to money."}
             </h1>
             {page === "transactions" && (
               <a class="btn export-top" href="/api/transactions.csv">
@@ -196,11 +197,13 @@ export function App() {
           <p class="lede">
             {page === "transactions"
               ? "Every alert, in one place. A clearer picture of what comes and goes."
-              : page === "inbox"
-                ? "Unrecognised mail stays here until you teach Ledger how to read it."
-                : page === "parsers"
-                  ? "Teach Ledger your bank’s format once. Keep every detail on your server."
-                  : "A quiet connection to the financial emails you already receive."}
+              : page === "insights"
+                ? "Your spending by category and month, against what’s usual for you."
+                : page === "inbox"
+                  ? "Unrecognised mail stays here until you teach Ledger how to read it."
+                  : page === "parsers"
+                    ? "Teach Ledger your bank’s format once. Keep every detail on your server."
+                    : "A quiet connection to the financial emails you already receive."}
           </p>
         </div>
         {page === "transactions" && (
@@ -236,6 +239,7 @@ export function App() {
             <TransactionsPage summary={summary} version={version} />
           </>
         )}
+        {page === "insights" && <InsightsPage version={version} month={summary.month} />}
         {page === "inbox" && (
           <InboxPage
             version={version}

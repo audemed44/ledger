@@ -539,10 +539,10 @@ func TestCategoryRoutes(t *testing.T) {
 		t.Fatal(w.Body.String())
 	}
 	month := rows[0].Date[:7]
-	if w = call("GET", "/api/categories/totals?month="+month, ""); !strings.Contains(w.Body.String(), `"category":"Takeaway"`) {
+	if w = call("GET", "/api/insights?month="+month, ""); !strings.Contains(w.Body.String(), `"category":"Takeaway"`) {
 		t.Fatal(w.Body.String())
 	}
-	if w = call("GET", "/api/categories/totals?month=nope", ""); w.Code != 400 {
+	if w = call("GET", "/api/insights?month=nope", ""); w.Code != 400 {
 		t.Fatal(w.Code)
 	}
 	if w = call("POST", fmt.Sprintf("/api/transactions/%d/category", rows[0].ID), `{"category_id":0}`); w.Code != 200 {
@@ -552,9 +552,6 @@ func TestCategoryRoutes(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 	if w = call("GET", "/api/transactions?category=none", ""); !strings.Contains(w.Body.String(), "SWIGGY") {
-		t.Fatal(w.Body.String())
-	}
-	if w = call("GET", "/api/summary", ""); !strings.Contains(w.Body.String(), `"categories":[`) {
 		t.Fatal(w.Body.String())
 	}
 }

@@ -57,16 +57,19 @@ func (s *Server) categoryRoutes(mux *http.ServeMux) {
 		logging.Audit(r.Context(), "category.delete", "category", pathID(r))
 		jsonResponse(w, map[string]bool{"ok": true})
 	})
-	// A month's spending per category; this month's is in the summary.
-	mux.HandleFunc("GET /api/categories/totals", func(w http.ResponseWriter, r *http.Request) {
+	// The Insights page for a month, this month by default.
+	mux.HandleFunc("GET /api/insights", func(w http.ResponseWriter, r *http.Request) {
 		month := r.URL.Query().Get("month")
+		if month == "" {
+			month = time.Now().Format("2006-01")
+		}
 		if _, err := time.Parse("2006-01", month); err != nil {
 			failure(w, 400, "Choose a month (YYYY-MM)")
 			return
 		}
-		out, err := s.Store.MonthCategories(month)
+		out, err := s.Store.MonthInsights(month, time.Now())
 		if err != nil {
-			serverError(w, r, err, "Could not load category totals")
+			serverError(w, r, err, "Could not load insights")
 			return
 		}
 		jsonResponse(w, out)
