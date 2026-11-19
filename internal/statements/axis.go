@@ -11,14 +11,18 @@ import (
 // The Axis Bank credit card layout: a payment summary (due amounts, period
 // and dates), a "Previous Balance - Payments - Credits + Purchase + Cash
 // Advance + Other Debit&Charges = Total Payment Due" row, then dated lines
-// ending in Dr or Cr until "End of Statement".
+// ending in Dr or Cr until "End of Statement". Cashback cards (Flipkart
+// Axis) add a "CASHBACK EARNED" column after the amount.
 var (
-	axisCard    = regexp.MustCompile(`\d{6}\*{6}(\d{4})`)
-	axisDate    = regexp.MustCompile(`\d{2}/\d{2}/\d{4}`)
-	axisSigned  = regexp.MustCompile(`([\d,]+\.\d{2})(?:\s+(Dr|Cr)\b)?`)
-	axisRow     = regexp.MustCompile(`^\s*(\d{2}/\d{2}/\d{4})(.*?)([\d,]+\.\d{2})\s+(Dr|Cr)\s*$`)
-	axisDatedAt = regexp.MustCompile(`^\s*\d{2}/\d{2}/\d{4}\s`)
-	gap         = regexp.MustCompile(`\s{2,}`)
+	axisCard   = regexp.MustCompile(`\d{6}\*{6}(\d{4})`)
+	axisDate   = regexp.MustCompile(`\d{2}/\d{2}/\d{4}`)
+	axisSigned = regexp.MustCompile(`([\d,]+\.\d{2})(?:\s+(Dr|Cr)\b)?`)
+	axisRow    = regexp.MustCompile(`^\s*(\d{2}/\d{2}/\d{4})(.*?)([\d,]+\.\d{2})\s+(Dr|Cr)\s*$`)
+	// axisCashbackRow is a row with the amount, then optionally the
+	// cashback it earned.
+	axisCashbackRow = regexp.MustCompile(`^\s*(\d{2}/\d{2}/\d{4})(.*?)([\d,]+\.\d{2})\s+(Dr|Cr)(?:\s+[\d,]+\.\d{2}\s+(?:Dr|Cr))?\s*$`)
+	axisDatedAt     = regexp.MustCompile(`^\s*\d{2}/\d{2}/\d{4}\s`)
+	gap             = regexp.MustCompile(`\s{2,}`)
 )
 
 // parseAxis reads an Axis Bank credit card statement.
@@ -54,6 +58,10 @@ func parseAxis(t Text, tolerance int64) (Statement, error) {
 	}
 	if head < 0 || summary < 0 || table < 0 {
 		return s, errors.New("payment summary or transaction table not found")
+	}
+	rowPattern := axisRow
+	if strings.Contains(lines[table], "CASHBACK EARNED") {
+		rowPattern = axisCashbackRow
 	}
 
 	// Due amounts, then the period, due date and generation date.
@@ -102,7 +110,7 @@ func parseAxis(t Text, tolerance int64) (Statement, error) {
 		if !axisDatedAt.MatchString(l) {
 			continue
 		}
-		m := axisRow.FindStringSubmatchIndex(l)
+		m := rowPattern.FindStringSubmatchIndex(l)
 		if m == nil {
 			rowErrors = append(rowErrors, fmt.Errorf("unparsed transaction on line %d", i+1))
 			continue
@@ -128,7 +136,7 @@ func parseAxis(t Text, tolerance int64) (Statement, error) {
 		}
 	}
 	for i := 0; i < table; i++ {
-		if axisRow.MatchString(lines[i]) {
+		if rowPattern.MatchString(lines[i]) {
 			rowErrors = append(rowErrors, fmt.Errorf("dated row outside the transaction table on line %d", i+1))
 		}
 	}
@@ -140,7 +148,7 @@ func parseAxis(t Text, tolerance int64) (Statement, error) {
 		return s, err
 	}
 	for n, i := range rows {
-		m := axisRow.FindStringSubmatch(lines[i])
+		m := rowPattern.FindStringSubmatch(lines[i])
 		date, e := dateIn("02/01/2006", m[1])
 		amount, e2 := money(m[3])
 		if e != nil || e2 != nil || amount == 0 {

@@ -106,7 +106,7 @@ var Adapters = []Adapter{{
 }, {
 	ID:          "axis-credit-card",
 	Name:        "Axis Credit Card Parser v1",
-	Description: "Axis Bank credit card payment summary and Dr/Cr transaction lines",
+	Description: "Axis Bank credit card payment summary and Dr/Cr transaction lines (Select, Flipkart)",
 	parse:       parseAxis,
 }, {
 	ID:          "icici-credit-card",

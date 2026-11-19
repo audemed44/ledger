@@ -83,6 +83,25 @@ func TestAxisCreditCard(t *testing.T) {
 	})
 }
 
+func TestFlipkartAxisCreditCard(t *testing.T) {
+	text := fixture.FlipkartAxisStatement
+	check(t, "axis-credit-card", layout(text), Statement{
+		Issuer: "Axis", AccountKind: "card", Account: "4343", Date: "2026-11-13", DueDate: "2026-12-03",
+		Opening: 20000, TotalDue: 136000, MinimumDue: 10000,
+	}, []string{
+		"2026-10-15 +140.00 CASHBACK CREDITED",
+		"2026-10-20 -300.00 EXAMPLE GROCERS PRIVATE,GURGAON",
+		"2026-10-22 -1200.00 EXAMPLE MARKETPLACE PVT,NOIDA",
+		"2026-10-25 +200.00 EXAMPLE MARKETPLACE PVT,NOIDA",
+	})
+	failsClosed(t, "axis-credit-card", map[string]Text{
+		"broken row":     layout(strings.Replace(text, "300.00 Dr          3.00 Cr", "300.00 ??          3.00 Cr", 1)),
+		"only cashback":  layout(strings.Replace(text, "1,200.00 Dr         60.00 Cr", "                    60.00 Cr", 1)),
+		"wrong balance":  layout(strings.Replace(text, "1,360.00 Dr                   over", "1,361.00 Dr                   over", 1)),
+		"no cashback hd": layout(strings.Replace(text, "CASHBACK EARNED", "", 1)),
+	})
+}
+
 func TestICICICreditCard(t *testing.T) {
 	text := Text{Layout: fixture.ICICIStatement.Layout, Raw: fixture.ICICIStatement.Raw}
 	check(t, "icici-credit-card", text, Statement{
