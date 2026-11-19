@@ -1358,6 +1358,9 @@ label.btn.disabled {
   border-color: var(--accent);
   color: var(--accent-hi);
 }
+.chip.no-credit {
+  margin-left: 6px;
+}
 
 /* Custom dates sit on their own row under the filters. */
 .custom-dates {

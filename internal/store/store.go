@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	_ "modernc.org/sqlite" // pure Go, so the build stays cgo-free
 
@@ -30,6 +31,8 @@ type Store struct {
 	// Statements downloads statements that emails link to instead of
 	// attaching; nil turns that off.
 	Statements *smartstatement.Fetcher
+	// Now is the clock; nil is time.Now.
+	Now func() time.Time
 	// mu serialises writes that read then update, such as processing a
 	// message or importing a statement.
 	mu sync.Mutex

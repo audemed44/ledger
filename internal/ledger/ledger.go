@@ -33,9 +33,13 @@ type Transaction struct {
 	// email having named no merchant.
 	Placeholder bool `json:"placeholder,omitempty"`
 	// Transfer is how it was found to move money between your accounts
-	// ("paired", "rule" or "manual"), and TransferOf the other side of a pair.
+	// ("paired", "rule", "manual", or "pending" for a card bill payment
+	// waiting for the card's credit), and TransferOf the other side of a pair.
 	Transfer   string `json:"transfer,omitempty"`
 	TransferOf int64  `json:"transfer_of,omitempty"`
+	// CardPayment marks a card bill payment no card credit was found for,
+	// so it counts as spending.
+	CardPayment bool `json:"card_payment,omitempty"`
 }
 
 // Account is a card or bank account, identified by issuer, type and the last

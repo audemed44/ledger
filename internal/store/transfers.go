@@ -19,6 +19,8 @@ import (
 //   - "rule": a transfer rule matched its description (money moving to an
 //     account Ledger doesn't see, such as SBI's auto-sweep into deposits).
 //   - "manual": marked by hand.
+//   - "pending": a card bill payment waiting for the card's credit (see
+//     findCardPayments); it pairs like an unmarked one.
 //
 // no_transfer marks a transaction you said isn't one; it's never paired or
 // matched by a rule again.
@@ -40,6 +42,10 @@ type TransferRule struct {
 // coincidence of amounts is left alone rather than guessed. The caller
 // holds s.mu, with no transaction open.
 func (s *Store) findTransfers() error {
+	// Pending card payments are worked out again after pairing.
+	if _, err := s.DB.Exec("UPDATE transactions SET transfer='' WHERE transfer='pending'"); err != nil {
+		return err
+	}
 	rules, err := s.TransferRules()
 	if err != nil {
 		return err
@@ -143,7 +149,7 @@ WHERE d.direction='debit' AND d.transfer IN ('','paired') AND c.transfer IN ('',
 			}
 		}
 	}
-	return nil
+	return s.findCardPayments()
 }
 
 // FindTransfers runs findTransfers on its own.

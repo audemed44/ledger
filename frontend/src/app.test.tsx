@@ -137,6 +137,41 @@ it("marks a transaction as a transfer from its actions", async () => {
   await waitFor(() => expect(posts).toEqual(["/api/transactions/7/transfer-rule"]));
 });
 
+it("shows card payments waiting for, or missing, the card's credit", async () => {
+  const row = {
+    message_id: 1,
+    account: "9001",
+    currency: "INR",
+    direction: "debit",
+    reference: "",
+    status: "confirmed",
+    issuer: "HDFC",
+  };
+  vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+    reply([
+      {
+        ...row,
+        id: 1,
+        merchant: "IB BILLPAY DR-HDFCWI-400000XXXXXX4242",
+        amount: 100000,
+        date: "2026-11-14",
+        transfer: "pending",
+      },
+      {
+        ...row,
+        id: 2,
+        merchant: "IB BILLPAY DR-HDFCWI-400000XXXXXX8080",
+        amount: 200000,
+        date: "2026-09-14",
+        card_payment: true,
+      },
+    ]),
+  );
+  render(<TransactionsPage summary={summary} version={0} />);
+  expect(await screen.findByText("card payment")).toBeTruthy();
+  expect(screen.getByText("no card credit")).toBeTruthy();
+});
+
 it("turns periods into date ranges", () => {
   const today = new Date(2026, 9, 3); // 3 October 2026
   expect(periodRange("this-month", today)).toEqual({ from: "2026-10-01", to: "2026-10-31" });
