@@ -1,5 +1,5 @@
 // The server API. A 401 tells the app to show the sign-in screen again.
-export async function api<T>(path: string, body?: unknown, method?: "DELETE"): Promise<T> {
+export async function api<T>(path: string, body?: unknown, method?: "DELETE" | "PUT"): Promise<T> {
   const res = await fetch("/api/" + path, {
     method: method ?? (body === undefined ? "GET" : "POST"),
     headers: body === undefined ? {} : { "Content-Type": "application/json" },

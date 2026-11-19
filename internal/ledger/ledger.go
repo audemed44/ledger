@@ -40,6 +40,11 @@ type Transaction struct {
 	// CardPayment marks a card bill payment no card credit was found for,
 	// so it counts as spending.
 	CardPayment bool `json:"card_payment,omitempty"`
+	// CategoryID and Category say what it was spent on, and CategorySource
+	// how: "manual" (set by hand), "rule", or "" when uncategorised.
+	CategoryID     int64  `json:"category_id,omitempty"`
+	Category       string `json:"category,omitempty"`
+	CategorySource string `json:"category_source,omitempty"`
 }
 
 // Account is a card or bank account, identified by issuer, type and the last

@@ -507,3 +507,54 @@ func TestReminderSettingsAreSavedFromTheUI(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestCategoryRoutes(t *testing.T) {
+	s := testStore(t)
+	s.SaveParser(fixture.AlertParser())
+	s.Ingest(fixture.Mail("food", strings.Replace(fixture.AlertBody, "Example Shop", "SWIGGY FOOD", 1)))
+	rows, _ := s.Transactions(store.Filter{})
+	h := (&Server{Store: s, Token: "1234"}).Handler()
+	call := func(method, path, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer 1234")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	w := call("POST", "/api/categories", `{"name":"Takeaway"}`)
+	var c store.Category
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &c) != nil || c.ID == 0 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w = call("POST", "/api/categories", `{"name":"takeaway"}`); w.Code != 400 {
+		t.Fatal("duplicate", w.Code)
+	}
+	if w = call("POST", "/api/category-rules", fmt.Sprintf(`{"contains":"swiggy","category_id":%d}`, c.ID)); w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	if w = call("GET", fmt.Sprintf("/api/transactions?category=%d", c.ID), ""); !strings.Contains(w.Body.String(), `"category":"Takeaway","category_source":"rule"`) {
+		t.Fatal(w.Body.String())
+	}
+	if w = call("GET", "/api/transactions.csv", ""); !strings.Contains(w.Body.String(), ",Takeaway") {
+		t.Fatal(w.Body.String())
+	}
+	month := rows[0].Date[:7]
+	if w = call("GET", "/api/categories/totals?month="+month, ""); !strings.Contains(w.Body.String(), `"category":"Takeaway"`) {
+		t.Fatal(w.Body.String())
+	}
+	if w = call("GET", "/api/categories/totals?month=nope", ""); w.Code != 400 {
+		t.Fatal(w.Code)
+	}
+	if w = call("POST", fmt.Sprintf("/api/transactions/%d/category", rows[0].ID), `{"category_id":0}`); w.Code != 200 {
+		t.Fatal(w.Code)
+	}
+	if w = call("DELETE", fmt.Sprintf("/api/categories/%d", c.ID), ""); w.Code != 200 {
+		t.Fatal(w.Code)
+	}
+	if w = call("GET", "/api/transactions?category=none", ""); !strings.Contains(w.Body.String(), "SWIGGY") {
+		t.Fatal(w.Body.String())
+	}
+	if w = call("GET", "/api/summary", ""); !strings.Contains(w.Body.String(), `"categories":[`) {
+		t.Fatal(w.Body.String())
+	}
+}

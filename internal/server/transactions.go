@@ -109,13 +109,14 @@ func filter(r *http.Request) store.Filter {
 	q := r.URL.Query()
 	offset, _ := strconv.Atoi(q.Get("offset"))
 	return store.Filter{
-		Search:  q.Get("search"),
-		Account: q.Get("account"),
-		Status:  q.Get("status"),
-		Kind:    q.Get("kind"),
-		From:    q.Get("from"),
-		To:      q.Get("to"),
-		Offset:  offset,
+		Search:   q.Get("search"),
+		Account:  q.Get("account"),
+		Status:   q.Get("status"),
+		Kind:     q.Get("kind"),
+		Category: q.Get("category"),
+		From:     q.Get("from"),
+		To:       q.Get("to"),
+		Offset:   offset,
 	}
 }
 
@@ -123,9 +124,11 @@ func filter(r *http.Request) store.Filter {
 // the accounts to filter by.
 type Summary struct {
 	store.Counts
-	Totals   []store.Total    `json:"totals"`
-	Accounts []ledger.Account `json:"accounts"`
-	Dues     []store.Due      `json:"dues"`
+	Totals []store.Total `json:"totals"`
+	// Categories is this month's spending per category.
+	Categories []store.CategoryTotal `json:"categories"`
+	Accounts   []ledger.Account      `json:"accounts"`
+	Dues       []store.Due           `json:"dues"`
 	// Reminders is whether payment reminders are sent (LEDGER_NOTIFY_URL is
 	// set), and their settings.
 	Reminders struct {
@@ -148,6 +151,9 @@ func (s *Server) summary() (Summary, error) {
 	if out.Totals, err = s.Store.MonthTotals(out.Month); err != nil {
 		return out, err
 	}
+	if out.Categories, err = s.Store.MonthCategories(out.Month); err != nil {
+		return out, err
+	}
 	if out.Accounts, err = s.Store.Accounts(); err != nil {
 		return out, err
 	}
@@ -165,7 +171,7 @@ func (s *Server) csv(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="ledger-transactions.csv"`)
 	writer := csv.NewWriter(w)
 	defer writer.Flush()
-	writer.Write([]string{"Date", "Issuer", "Account", "Account type", "Merchant", "Amount", "Currency", "Direction", "Status", "Reference", "Transfer"})
+	writer.Write([]string{"Date", "Issuer", "Account", "Account type", "Merchant", "Amount", "Currency", "Direction", "Status", "Reference", "Transfer", "Category"})
 	f := filter(r)
 	f.Offset = 0
 	for {
@@ -175,7 +181,7 @@ func (s *Server) csv(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, t := range rows {
 			record := []string{t.Date, t.Issuer, t.Account, t.AccountKind, t.Merchant, ledger.Decimal(t.Amount),
-				t.Currency, t.Direction, t.Status, t.Reference, t.Transfer}
+				t.Currency, t.Direction, t.Status, t.Reference, t.Transfer, t.Category}
 			for i := range record {
 				record[i] = csvSafe(record[i])
 			}

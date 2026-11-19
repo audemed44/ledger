@@ -23,6 +23,8 @@ binary that idles at about 11 MB of RAM.
   today: HDFC, ICICI, Axis, IDFC FIRST and HSBC credit cards, and SBI and HDFC
   Bank accounts (HDFC Bank's emailed SmartStatements and NetBanking
   downloads).
+- **Categories**: set by hand or by "description contains" rules, with
+  the month's spending ranked by category.
 - **Reconciliation**: a statement line confirms the alert for it, lines
   with no alert are added, and alerts missing from the statement are
   flagged.

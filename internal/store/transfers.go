@@ -149,7 +149,11 @@ WHERE d.direction='debit' AND d.transfer IN ('','paired') AND c.transfer IN ('',
 			}
 		}
 	}
-	return s.findCardPayments()
+	if err = s.findCardPayments(); err != nil {
+		return err
+	}
+	// Rules for categories follow the same changes.
+	return s.findCategories()
 }
 
 // FindTransfers runs findTransfers on its own.
