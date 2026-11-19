@@ -44,6 +44,44 @@ Txn Date     Type                              Cr/Db MAD Contribution          A
 25th Sep     Purchase                          Db                    2%          5000
 `
 
+// FlipkartAxisStatement is a Flipkart Axis Bank credit card statement for
+// card 4343, whose lines carry the cashback they earned in a last column: a
+// cashback credit, two purchases and a refund whose cashback is reversed.
+// 200 - 0 - 340 + 1,500 + 0 + 0 = 1,360.00 due.
+const FlipkartAxisStatement = `                                                                                                          Flipkart Axis Bank Credit Card Statement
+
+EXAMPLE PERSON
+1 EXAMPLE ROAD,
+EXAMPLETOWN 100001
+
+                                                                                             PAYMENT SUMMARY
+        Total Payment Due                         Minimum Payment Due                                Statement Period                               Payment Due Date                       Statement Generation Date
+            1,360.00 Dr                                   100.00 Dr                           14/10/2026 - 13/11/2026                                  03/12/2026                                        13/11/2026
+
+       Credit Card Number                                  Credit Limit                            Available Credit Limit                          Available Cash Limit                          For hassle free payments register for
+       500000******4343                                    100,000.00                                     98,640.00                                           0.00                              Auto-Debit facility on 18605005555
+
+
+               Previous Balance - Payments - Credits + Purchase + Cash Advance + Other Debit&Charges =Total Payment Due                                                                       Making only the minimum payment every
+                                                                                                                                                                                            month would result in the repayment stretching
+        200.00                        0.00               340.00             1,500.00                  0.00                          0.00                       1,360.00 Dr                   over years with consequent interest payment
+
+                                                                                                     Account Summary
+    DATE                                      TRANSACTION DETAILS                                                                   MERCHANT CATEGORY        AMOUNT (Rs.)     CASHBACK EARNED
+ Card No:                      500000******4343                                                                                   Name    EXAMPLE PERSON
+15/10/2026              CASHBACK CREDITED                                                                                                                       140.00 Cr
+20/10/2026              EXAMPLE GROCERS PRIVATE,GURGAON                                                                           DEPT STORES                       300.00 Dr          3.00 Cr
+22/10/2026              EXAMPLE MARKETPLACE PVT,NOIDA                                                                             MISC STORE                      1,200.00 Dr         60.00 Cr
+25/10/2026              EXAMPLE MARKETPLACE PVT,NOIDA                                                                             MISC STORE                        200.00 Cr         10.00 Dr
+                                                                                               **** End of Statement ****
+
+                                                                                                     CASHBACK DETAILS
+                                         Cashback Earned                                                                                                       Cashback Credited
+                                            53.00                                                                                                                  140.00
+ Your cheque should be payable to Axis Bank Card No.
+ 500000******4343 . Please write your NAME & TELEPHONE No. on the
+`
+
 // ICICIStatement is an ICICI Bank credit card statement for card 4242, as
 // layout text (whose transaction amounts are missing, as in real
 // extractions) and raw text. 2,000.00 + 1,250.50 + 0.00 - 2,000.00 =
