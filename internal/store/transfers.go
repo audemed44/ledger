@@ -82,6 +82,8 @@ func (s *Store) findTransfers() error {
 		}
 	}
 
+	// A card debit is a purchase, never money moving to another of your
+	// accounts, so the paying side is a bank (or unknown) account.
 	// Candidates include transactions already paired, so the outcome doesn't
 	// depend on the order they arrived in: a pair that a later transaction
 	// makes ambiguous is undone.
@@ -89,7 +91,7 @@ func (s *Store) findTransfers() error {
   ON c.amount=d.amount AND c.currency=d.currency AND c.direction='credit'
   AND NOT (lower(trim(c.issuer))=lower(trim(d.issuer)) AND c.account_kind=d.account_kind AND c.account=d.account)
   AND abs(julianday(substr(c.date,1,10))-julianday(substr(d.date,1,10)))<=?
-WHERE d.direction='debit' AND d.transfer IN ('','paired') AND c.transfer IN ('','paired')
+WHERE d.direction='debit' AND d.account_kind!='card' AND d.transfer IN ('','paired') AND c.transfer IN ('','paired')
   AND d.no_transfer=0 AND c.no_transfer=0 AND d.status!='dismissed' AND c.status!='dismissed'`, TransferWindowDays)
 	if err != nil {
 		return err

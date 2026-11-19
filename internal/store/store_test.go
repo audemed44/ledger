@@ -1075,13 +1075,19 @@ func TestTransfersBetweenYourAccounts(t *testing.T) {
 	mail(hdfcOut, "rent", "INR 999.00 at Rent card 9001 on 2026-10-07")
 	mail(sbiIn, "a", "INR 999.00 at Someone card 4556 on 2026-10-07")
 	mail(cardIn, "b", "INR 999.00 at Payment card 4242 on 2026-10-08")
+	// A card purchase and money arriving in a bank account: not a transfer.
+	mail(parser("Card spend", "ICICI", "card", "debit"), "tickets", "INR 1,192.00 at Example Cinema card 4242 on 2026-10-04")
+	mail(sbiIn, "repaid", "INR 1,192.00 at UPI/CR/PARENT card 4556 on 2026-10-04")
 	got := kinds()
+	if got["ICICI debit 1192.00"] != "" || got["SBI credit 1192.00"] != "" {
+		t.Fatal("card purchase paired", got)
+	}
 	if got["HDFC debit 2000.00"] != "paired" || got["SBI credit 2000.00"] != "paired" ||
 		got["HDFC credit 300.00"] != "" || got["HDFC debit 999.00"] != "" {
 		t.Fatal(got)
 	}
 	totals, _ := s.MonthTotals("2026-10")
-	if totals[0].Debit != 129900 {
+	if totals[0].Debit != 249100 {
 		t.Fatal("transfer counted in spending", totals)
 	}
 	if rows, _ := s.Transactions(Filter{Kind: "transfers"}); len(rows) != 2 {
